@@ -4,6 +4,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { getSeenMap } from '../lib/inbox';
+import { C } from '../lib/theme';
+import TabBar from '../components/TabBar';
 
 const T = {
   heading: 'הודעות',
@@ -171,6 +173,7 @@ export default function Messages() {
           )}
         />
       )}
+      <TabBar active="messages" />
     </View>
   );
 }

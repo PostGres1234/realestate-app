@@ -1,24 +1,28 @@
 ﻿import { useState } from 'react';
 import { View, Text, TextInput, Pressable, Alert, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../../lib/supabase';
+import { C } from '../../lib/theme';
 
 const T = {
   title: 'ברוכים השבים',
+  subtitle: 'התחברו לחשבון שלכם',
   emailLabel: 'אימייל',
-  emailHint: 'לדוגמה: name@gmail.com',
+  emailPlaceholder: 'name@gmail.com',
   passLabel: 'סיסמה',
-  passHint: 'לפחות 6 תווים',
+  passPlaceholder: 'לפחות 6 תווים',
   submit: 'התחברות',
   busy: 'מתחבר...',
   toSignup: 'אין לכם חשבון? הרשמה',
-  toHome: 'חזרה לנכסים',
+  back: 'המשך כאורח',
   failTitle: 'ההתחברות נכשלה',
 };
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function handleLogin() {
@@ -35,32 +39,38 @@ export default function Login() {
   return (
     <View style={s.wrap}>
       <Text style={s.title}>{T.title}</Text>
+      <Text style={s.subtitle}>{T.subtitle}</Text>
 
       <View style={s.field}>
         <Text style={s.label}>{T.emailLabel}</Text>
         <TextInput
           style={s.input}
-          placeholder={T.emailLabel}
-          placeholderTextColor="#aaa"
+          placeholder={T.emailPlaceholder}
+          placeholderTextColor="#A9B0BF"
           autoCapitalize="none"
+          autoCorrect={false}
           keyboardType="email-address"
           value={email}
           onChangeText={setEmail}
         />
-        <Text style={s.hint}>{T.emailHint}</Text>
       </View>
 
       <View style={s.field}>
         <Text style={s.label}>{T.passLabel}</Text>
-        <TextInput
-          style={s.input}
-          placeholder={T.passLabel}
-          placeholderTextColor="#aaa"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-        <Text style={s.hint}>{T.passHint}</Text>
+        <View style={s.passWrap}>
+          <TextInput
+            style={s.passInput}
+            placeholder={T.passPlaceholder}
+            placeholderTextColor="#A9B0BF"
+            secureTextEntry={!showPass}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <Pressable style={s.eye} onPress={() => setShowPass((v) => !v)}>
+            <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'}
+              size={21} color={C.textMuted} />
+          </Pressable>
+        </View>
       </View>
 
       <Pressable style={[s.btn, busy && { opacity: 0.5 }]} onPress={handleLogin} disabled={busy}>
@@ -71,20 +81,24 @@ export default function Login() {
         <Text style={s.link}>{T.toSignup}</Text>
       </Pressable>
       <Pressable onPress={() => router.replace('/')}>
-        <Text style={s.link}>{T.toHome}</Text>
+        <Text style={s.linkMuted}>{T.back}</Text>
       </Pressable>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  wrap: { flex: 1, justifyContent: 'center', padding: 24 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 24, textAlign: 'right' },
+  wrap: { flex: 1, backgroundColor: C.page, justifyContent: 'center', padding: 24 },
+  title: { fontSize: 28, fontWeight: '700', color: C.text, textAlign: 'right' },
+  subtitle: { fontSize: 13, color: C.textMuted, textAlign: 'right', marginTop: 6, marginBottom: 24 },
   field: { marginBottom: 18 },
-  label: { fontSize: 15, fontWeight: '600', marginBottom: 6, textAlign: 'right', color: '#333' },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 10, padding: 14, fontSize: 16, textAlign: 'right', backgroundColor: '#fff' },
-  hint: { fontSize: 12, color: '#999', marginTop: 4, textAlign: 'right' },
-  btn: { backgroundColor: '#1f6feb', padding: 16, borderRadius: 10, alignItems: 'center', marginTop: 8 },
+  label: { fontSize: 14, fontWeight: '600', marginBottom: 6, textAlign: 'right', color: C.text },
+  input: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 14, padding: 14, fontSize: 15, textAlign: 'right', color: C.text },
+  passWrap: { flexDirection: 'row-reverse', alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 14 },
+  passInput: { flex: 1, padding: 14, fontSize: 15, textAlign: 'right', color: C.text },
+  eye: { paddingHorizontal: 14, paddingVertical: 14 },
+  btn: { backgroundColor: C.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 8 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  link: { textAlign: 'center', color: '#1f6feb', marginTop: 16 },
+  link: { textAlign: 'center', color: C.primary, marginTop: 16, fontSize: 14 },
+  linkMuted: { textAlign: 'center', color: C.textMuted, marginTop: 14, fontSize: 13 },
 });
