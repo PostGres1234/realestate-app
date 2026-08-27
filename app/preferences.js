@@ -5,7 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { C } from '../lib/theme';
-import LocationInput from '../components/LocationInput';
+import MultiCityInput from '../components/MultiCityInput';
 
 const T = {
   heading: 'ההעדפות שלי',
@@ -15,11 +15,10 @@ const T = {
   dealAny: 'הכל',
   dealSale: 'למכירה',
   dealRent: 'להשכרה',
-  cityLabel: 'עיר או שכונה',
-  cityPlaceholder: 'התחילו להקליד',
-  cityHint: 'השאירו ריק לקבלת נכסים מכל הארץ',
+  cityLabel: 'ערים ושכונות',
+  cityPlaceholder: 'הוסיפו ערים או שכונות',
+  cityHint: 'אפשר לבחור כמה. השאירו ריק לכל הארץ.',
   typeLabel: 'סוג הנכס',
-  typeAny: 'הכל',
   priceLabel: 'טווח מחירים',
   from: 'ממחיר',
   to: 'עד מחיר',
@@ -64,7 +63,7 @@ export default function Preferences() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [deal, setDeal] = useState('any');
-  const [city, setCity] = useState('');
+  const [cities, setCities] = useState([]);
   const [ptype, setPtype] = useState(null);
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
@@ -86,7 +85,7 @@ export default function Preferences() {
 
     if (data) {
       setDeal(data.listing_type ?? 'any');
-      setCity(data.city ?? '');
+      setCities(data.city ? data.city.split(',').map((x) => x.trim()).filter(Boolean) : []);
       setPtype(data.property_type ?? null);
       setMinPrice(data.min_price ? String(data.min_price) : '');
       setMaxPrice(data.max_price ? String(data.max_price) : '');
@@ -114,7 +113,7 @@ export default function Preferences() {
 
   function clearAll() {
     setDeal('any');
-    setCity('');
+    setCities([]);
     setPtype(null);
     setMinPrice(''); setMaxPrice('');
     setMinRooms(''); setMaxRooms('');
@@ -129,7 +128,7 @@ export default function Preferences() {
     const { error } = await supabase.from('preferences').upsert({
       user_id: user.id,
       listing_type: deal,
-      city: city.trim() || null,
+      city: cities.length ? cities.join(',') : null,
       property_type: ptype,
       min_price: num(minPrice),
       max_price: num(maxPrice),
@@ -189,11 +188,13 @@ export default function Preferences() {
 
       <View style={[s.field, { zIndex: 20 }]}>
         <Text style={s.label}>{T.cityLabel}</Text>
-        <LocationInput
-          value={city}
-          onChangeText={setCity}
-          placeholder={T.cityPlaceholder}
-        />
+        <View style={{ flexDirection: 'row-reverse' }}>
+          <MultiCityInput
+            cities={cities}
+            setCities={setCities}
+            placeholder={T.cityPlaceholder}
+          />
+        </View>
         <Text style={s.hint}>{T.cityHint}</Text>
       </View>
 

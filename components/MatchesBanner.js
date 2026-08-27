@@ -7,11 +7,11 @@ import { useAuth } from '../lib/auth';
 import { C } from '../lib/theme';
 
 const T = {
-  one: 'נכס חדש מתאים להעדפות שלכם',
-  many: 'נכסים חדשים מתאימים להעדפות שלכם',
-  view: 'צפייה',
-  setup: 'הגדירו העדפות וקבלו עדכון על נכסים מתאימים',
-  setupCta: 'הגדרה',
+  one: 'נכס חדש מתאים לכם',
+  many: 'נכסים חדשים מתאימים לכם',
+  sub: 'לפי ההעדפות שהגדרתם',
+  setup: 'הגדירו העדפות',
+  setupSub: 'ונעדכן אתכם על נכסים מתאימים',
 };
 
 export default function MatchesBanner() {
@@ -23,10 +23,8 @@ export default function MatchesBanner() {
     if (!user) { setCount(0); return; }
 
     const { data: pref } = await supabase
-      .from('preferences')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
+      .from('preferences').select('user_id')
+      .eq('user_id', user.id).maybeSingle();
 
     if (!pref) { setHasPrefs(false); setCount(0); return; }
     setHasPrefs(true);
@@ -42,10 +40,15 @@ export default function MatchesBanner() {
 
   if (!hasPrefs) {
     return (
-      <Pressable style={s.soft} onPress={() => router.push('/preferences')}>
-        <Ionicons name="options-outline" size={18} color={C.textSecondary} />
-        <Text style={s.softText}>{T.setup}</Text>
-        <Text style={s.softCta}>{T.setupCta}</Text>
+      <Pressable style={s.card} onPress={() => router.push('/preferences')}>
+        <View style={s.iconMuted}>
+          <Ionicons name="options-outline" size={18} color={C.textSecondary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.titleMuted}>{T.setup}</Text>
+          <Text style={s.sub}>{T.setupSub}</Text>
+        </View>
+        <Ionicons name="chevron-back" size={18} color={C.textMuted} />
       </Pressable>
     );
   }
@@ -53,23 +56,29 @@ export default function MatchesBanner() {
   if (count === 0) return null;
 
   return (
-    <Pressable style={s.bar} onPress={() => router.push('/matches')}>
-      <View style={s.badge}>
-        <Text style={s.badgeText}>{count}</Text>
+    <Pressable style={s.cardOn} onPress={() => router.push('/matches')}>
+      <View style={s.icon}>
+        <Ionicons name="sparkles-outline" size={18} color={C.primary} />
+        <View style={s.dot} />
       </View>
-      <Text style={s.text}>{count === 1 ? T.one : T.many}</Text>
-      <Text style={s.cta}>{T.view}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={s.title}>
+          {count} {count === 1 ? T.one : T.many}
+        </Text>
+        <Text style={s.sub}>{T.sub}</Text>
+      </View>
+      <Ionicons name="chevron-back" size={18} color={C.primary} />
     </Pressable>
   );
 }
 
 const s = StyleSheet.create({
-  bar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: C.primary, marginHorizontal: 16, marginTop: 12, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
-  badge: { backgroundColor: 'rgba(255,255,255,0.25)', minWidth: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7 },
-  badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  text: { color: '#fff', fontSize: 13, flex: 1, textAlign: 'right' },
-  cta: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  soft: { flexDirection: 'row-reverse', alignItems: 'center', gap: 9, backgroundColor: C.surface, marginHorizontal: 16, marginTop: 12, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
-  softText: { color: C.textSecondary, fontSize: 12, flex: 1, textAlign: 'right' },
-  softCta: { color: C.primary, fontSize: 12, fontWeight: '700' },
+  card: { flexDirection: 'row-reverse', alignItems: 'center', gap: 11, backgroundColor: C.surface, marginHorizontal: 16, marginTop: 12, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12 },
+  cardOn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 11, backgroundColor: C.primaryTint, marginHorizontal: 16, marginTop: 12, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12 },
+  icon: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  iconMuted: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.page, alignItems: 'center', justifyContent: 'center' },
+  dot: { position: 'absolute', top: 6, left: 7, width: 7, height: 7, borderRadius: 4, backgroundColor: C.danger },
+  title: { fontSize: 14, fontWeight: '700', color: C.primary, textAlign: 'right' },
+  titleMuted: { fontSize: 14, fontWeight: '600', color: C.text, textAlign: 'right' },
+  sub: { fontSize: 11, color: C.textMuted, textAlign: 'right', marginTop: 2 },
 });

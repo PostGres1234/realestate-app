@@ -21,6 +21,8 @@ const T = {
   guest: 'התחברו כדי לנהל את החשבון שלכם.',
   login: 'התחברות',
   listings: 'נכסים',
+  editProfile: 'עריכת פרופיל',
+  editProfileHint: 'שם, טלפון, עיסוק והגדרות שיחות',
 };
 
 export default function Account() {
@@ -56,6 +58,7 @@ export default function Account() {
   const initials = (user.email ?? '?').slice(0, 2).toUpperCase();
 
   const rows = [
+    { icon: 'person-outline', label: T.editProfile, hint: T.editProfileHint, path: '/edit-profile' },
     { icon: 'home-outline', label: T.myListings, hint: T.myListingsHint, path: '/sell/mine', badge: count },
     { icon: 'add-circle-outline', label: T.addListing, hint: T.addListingHint, path: '/sell/new' },
     { icon: 'options-outline', label: T.prefs, hint: T.prefsHint, path: '/preferences' },

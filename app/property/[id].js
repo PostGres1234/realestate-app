@@ -19,33 +19,23 @@ const T = {
   forRent: 'להשכרה',
   forSale: 'למכירה',
   featuresTitle: 'מה יש בנכס',
-  locked: 'התחברו כדי לראות תיאור מלא, כתובת, מספר חדרים ושטח.',
-  ctaGuest: 'התחברו כדי ליצור קשר',
-  ctaFree: 'הירשמו למנוי כדי ליצור קשר',
-  ctaPaid: 'צרו קשר עם המוכר',
-  sellerBtn: 'מידע על המוכר',
-  sellerTitle: 'פרטי המוכר',
-  sellerOcc: 'עיסוק',
-  sellerSince: 'חבר מאז',
-  sellerListings: 'נכסים מפורסמים',
-  sellerLocked: 'הירשמו למנוי כדי לראות את פרטי המוכר.',
-  sellerGuest: 'התחברו כדי לראות את פרטי המוכר.',
-  notProvided: 'לא צוין',
-  close: 'סגירה',
+  locked: 'הצטרפו כדי לראות תיאור מלא, כתובת, מספר חדרים ושטח.',
+  ctaGuest: 'הצטרפו כדי ליצור קשר',
+  ctaUser: 'שליחת פנייה לבעל הנכס',
   error: 'שגיאה',
-  introTitle: 'פנייה למוכר',
-  introHint: 'המוכר יראה את הפרטים האלה בהודעה הראשונה.',
+  introTitle: 'פנייה לבעל הנכס',
+  introHint: 'בעל הנכס יראה את הפרטים האלה ויוכל לחזור אליכם.',
   fNameLabel: 'שם פרטי',
   lNameLabel: 'שם משפחה',
-  occLabel: 'עיסוק (אופציונלי)',
+  occLabel: 'עיסוק',
   occPlaceholder: 'לדוגמה: מהנדס תוכנה',
-  noteLabel: 'הודעה למוכר (אופציונלי)',
+  noteLabel: 'הודעה (אופציונלי)',
   notePlaceholder: 'מתי נוח לכם לראות את הנכס?',
   sendIntro: 'שליחת פנייה',
   sendingIntro: 'שולח...',
   cancel: 'ביטול',
   introMissing: 'חסרים פרטים',
-  introMissingBody: 'יש למלא שם פרטי ושם משפחה.',
+  introMissingBody: 'יש למלא שם פרטי, שם משפחה ועיסוק.',
 };
 
 const FEATURES = [
@@ -70,12 +60,6 @@ export default function PropertyDetail() {
   const [p, setP] = useState(null);
   const [media, setMedia] = useState([]);
   const [err, setErr] = useState(null);
-  const [subscribed, setSubscribed] = useState(false);
-
-  const [sellerOpen, setSellerOpen] = useState(false);
-  const [seller, setSeller] = useState(null);
-  const [sellerCount, setSellerCount] = useState(null);
-  const [sellerLoading, setSellerLoading] = useState(false);
 
   const [introOpen, setIntroOpen] = useState(false);
   const [fName, setFName] = useState('');
@@ -107,13 +91,8 @@ export default function PropertyDetail() {
   }, [id, user]);
 
   useEffect(() => {
-    if (!user) return setSubscribed(false);
+    if (!user) return;
     (async () => {
-      const { data } = await supabase
-        .from('subscriptions').select('id')
-        .eq('user_id', user.id).eq('status', 'active').limit(1);
-      setSubscribed((data ?? []).length > 0);
-
       const { data: prof } = await supabase
         .from('profiles').select('full_name, occupation')
         .eq('id', user.id).maybeSingle();
@@ -126,29 +105,8 @@ export default function PropertyDetail() {
     })();
   }, [user]);
 
-  async function openSeller() {
-    setSellerOpen(true);
-    if (seller || !user || !subscribed || !p?.seller_id) return;
-
-    setSellerLoading(true);
-    const { data: prof } = await supabase
-      .from('profiles')
-      .select('full_name, occupation, created_at')
-      .eq('id', p.seller_id)
-      .maybeSingle();
-    setSeller(prof ?? null);
-
-    const { data: list } = await supabase
-      .from('properties')
-      .select('id')
-      .eq('seller_id', p.seller_id)
-      .eq('status', 'active');
-    setSellerCount((list ?? []).length);
-    setSellerLoading(false);
-  }
-
   async function contactSeller() {
-if (!user) return router.push('/subscribe');
+    if (!user) return router.push('/subscribe');
 
     const { data: existing } = await supabase
       .from('conversations').select('id')
@@ -159,7 +117,7 @@ if (!user) return router.push('/subscribe');
   }
 
   async function sendIntro() {
-    if (!fName.trim() || !lName.trim()) {
+    if (!fName.trim() || !lName.trim() || !occupation.trim()) {
       return Alert.alert(T.introMissing, T.introMissingBody);
     }
     setSending(true);
@@ -214,15 +172,10 @@ if (!user) return router.push('/subscribe');
   if (!p) return <ActivityIndicator style={{ marginTop: 80 }} size="large" color={C.primary} />;
 
   const money = (n) => '\u20AA' + new Intl.NumberFormat('he-IL').format(n);
-
-const cta = user ? T.ctaPaid : T.ctaGuest;
-
+  const cta = user ? T.ctaUser : T.ctaGuest;
   const specs = p.bedrooms + ' ' + T.rooms + '  ·  ' + p.bathrooms + ' ' + T.baths + '  ·  ' + p.area_sqm + ' ' + T.sqm;
   const owned = FEATURES.filter((f) => p[f.key]);
-  const initials = (seller?.full_name ?? '?').slice(0, 2).toUpperCase();
-  const since = seller?.created_at
-    ? new Date(seller.created_at).toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })
-    : null;
+  const isOwner = user?.id === p.seller_id;
 
   return (
     <ScrollView style={s.wrap} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -255,7 +208,7 @@ const cta = user ? T.ctaPaid : T.ctaGuest;
         </View>
 
         <Text style={s.city}>
-          {p.city}{p.neighborhood ? ', ' + p.neighborhood : ''}
+          {p.neighborhood ? p.city + ', ' + p.neighborhood : p.city}
         </Text>
 
         {user ? (
@@ -285,76 +238,12 @@ const cta = user ? T.ctaPaid : T.ctaGuest;
           </View>
         )}
 
-        <Pressable style={s.btn} onPress={contactSeller}>
-          <Text style={s.btnText}>{cta}</Text>
-        </Pressable>
-
-        <Pressable style={s.btnOutline} onPress={openSeller}>
-          <Ionicons name="person-outline" size={17} color={C.primary} />
-          <Text style={s.btnOutlineText}>{T.sellerBtn}</Text>
-        </Pressable>
+        {!isOwner ? (
+          <Pressable style={s.btn} onPress={contactSeller}>
+            <Text style={s.btnText}>{cta}</Text>
+          </Pressable>
+        ) : null}
       </View>
-
-      <Modal visible={sellerOpen} transparent animationType="slide"
-        onRequestClose={() => setSellerOpen(false)}>
-        <View style={s.backdrop}>
-          <View style={s.sheet}>
-            <View style={s.sheetHeader}>
-              <Text style={s.sheetTitle}>{T.sellerTitle}</Text>
-              <Pressable onPress={() => setSellerOpen(false)}>
-                <Ionicons name="close" size={24} color={C.textMuted} />
-              </Pressable>
-            </View>
-
-            {!user ? (
-              <Text style={s.gate}>{T.sellerGuest}</Text>
-            ) : !subscribed ? (
-              <Text style={s.gate}>{T.sellerLocked}</Text>
-            ) : sellerLoading ? (
-              <ActivityIndicator style={{ marginVertical: 30 }} color={C.primary} />
-            ) : (
-              <View>
-                <View style={s.sellerHead}>
-                  <View style={s.avatar}>
-                    <Text style={s.avatarText}>{initials}</Text>
-                  </View>
-                  <Text style={s.sellerName}>
-                    {seller?.full_name ?? T.notProvided}
-                  </Text>
-                </View>
-
-                <View style={s.infoRow}>
-                  <Ionicons name="briefcase-outline" size={18} color={C.primary} />
-                  <Text style={s.infoLabel}>{T.sellerOcc}</Text>
-                  <Text style={s.infoValue}>
-                    {seller?.occupation || T.notProvided}
-                  </Text>
-                </View>
-
-                {since ? (
-                  <View style={s.infoRow}>
-                    <Ionicons name="calendar-outline" size={18} color={C.primary} />
-                    <Text style={s.infoLabel}>{T.sellerSince}</Text>
-                    <Text style={s.infoValue}>{since}</Text>
-                  </View>
-                ) : null}
-
-                {sellerCount !== null ? (
-                  <View style={s.infoRow}>
-                    <Ionicons name="home-outline" size={18} color={C.primary} />
-                    <Text style={s.infoLabel}>{T.sellerListings}</Text>
-                    <Text style={s.infoValue}>{sellerCount}</Text>
-                  </View>
-                ) : null}
-              </View>
-            )}
-
-            <Pressable style={s.closeBtn} onPress={() => setSellerOpen(false)}>
-              <Text style={s.closeText}>{T.close}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
 
       <Modal visible={introOpen} transparent animationType="slide"
         onRequestClose={() => setIntroOpen(false)}>
@@ -422,23 +311,10 @@ const s = StyleSheet.create({
   lockText: { color: C.textSecondary, textAlign: 'right', lineHeight: 22 },
   btn: { backgroundColor: C.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 24 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  btnOutline: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderColor: C.primary, borderRadius: 14, paddingVertical: 15, marginTop: 10 },
-  btnOutlineText: { color: C.primary, fontWeight: '600', fontSize: 15 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: { backgroundColor: C.page, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 },
-  sheetHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   sheetTitle: { fontSize: 20, fontWeight: '700', color: C.text, textAlign: 'right' },
   sheetHint: { fontSize: 12, color: C.textMuted, textAlign: 'right', marginTop: 4, marginBottom: 8 },
-  gate: { color: C.textSecondary, textAlign: 'center', fontSize: 15, lineHeight: 22, marginVertical: 24 },
-  sellerHead: { alignItems: 'center', gap: 10, marginBottom: 20 },
-  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.primaryTint, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: C.primary, fontWeight: '700', fontSize: 20 },
-  sellerName: { fontSize: 18, fontWeight: '700', color: C.text },
-  infoRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: C.border },
-  infoLabel: { fontSize: 14, color: C.textMuted, flex: 1, textAlign: 'right' },
-  infoValue: { fontSize: 15, color: C.text, fontWeight: '600' },
-  closeBtn: { backgroundColor: C.surface, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 20 },
-  closeText: { color: C.textSecondary, fontWeight: '600', fontSize: 15 },
   fLabel: { fontSize: 13, fontWeight: '600', color: C.text, textAlign: 'right', marginBottom: 5, marginTop: 10 },
   fInput: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 12, padding: 12, fontSize: 15, textAlign: 'right', color: C.text },
   cancelText: { color: C.textMuted, textAlign: 'center', fontSize: 14 },

@@ -9,22 +9,21 @@ const MIN_AGE = 18;
 
 const T = {
   title: 'יצירת חשבון',
-  subtitle: 'חשבון פותח גישה מלאה: כל פרטי הנכסים, יצירת קשר עם מוכרים ופרסום נכסים.',
+  subtitle: 'חשבון פותח גישה מלאה: כל פרטי הנכסים, יצירת קשר עם בעלי נכסים ופרסום נכסים.',
   benefit1: 'צפייה בכל פרטי הנכסים',
-  benefit2: 'יצירת קשר והתכתבות עם מוכרים',
+  benefit2: 'התכתבות עם בעלי נכסים',
   benefit3: 'פרסום נכסים למכירה או השכרה',
   nameLabel: 'שם מלא',
   namePlaceholder: 'שם פרטי ושם משפחה',
-  nameHint: 'השם שיוצג למוכרים ולקונים',
+  nameHint: 'השם שיוצג בפניות שתשלחו',
+  phoneLabel: 'טלפון',
+  phonePlaceholder: '050-0000000',
+  phoneHint: 'יוצג לבעלי נכסים שאליהם תפנו, כדי שיוכלו לחזור אליכם.',
   dobLabel: 'תאריך לידה',
   dobHint: 'ההרשמה מיועדת לבני 18 ומעלה',
   day: 'יום',
   month: 'חודש',
   year: 'שנה',
-  occLabel: 'עיסוק',
-  occOptional: 'אופציונלי',
-  occPlaceholder: 'לדוגמה: מהנדס תוכנה',
-  occHint: 'אם תשאירו ריק, השדה לא יוצג לאחרים',
   emailLabel: 'אימייל',
   emailPlaceholder: 'name@gmail.com',
   passLabel: 'סיסמה',
@@ -35,6 +34,7 @@ const T = {
   back: 'המשך כאורח',
   checkTitle: 'בדקו את הפרטים',
   needName: 'יש למלא שם מלא.',
+  needPhone: 'יש למלא מספר טלפון תקין.',
   needEmail: 'יש למלא כתובת אימייל תקינה.',
   needPass: 'הסיסמה חייבת להכיל לפחות 6 תווים.',
   needDob: 'יש למלא יום, חודש ושנה.',
@@ -84,10 +84,10 @@ function validateDob(dayStr, monthStr, yearStr) {
 
 export default function SignUp() {
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [day, setDay] = useState('');
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
-  const [occupation, setOccupation] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -95,6 +95,9 @@ export default function SignUp() {
 
   async function handleSignUp() {
     if (!fullName.trim()) return Alert.alert(T.checkTitle, T.needName);
+
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 9) return Alert.alert(T.checkTitle, T.needPhone);
 
     const dobResult = validateDob(day, month, year);
     if (dobResult.error) return Alert.alert(T.checkTitle, dobResult.error);
@@ -120,8 +123,8 @@ export default function SignUp() {
       const { error: profErr } = await supabase.from('profiles').insert({
         id: data.user.id,
         full_name: fullName.trim(),
+        phone: phone.trim(),
         date_of_birth: dobResult.iso,
-        occupation: occupation.trim() || null,
       });
       if (profErr) console.log('profile error', profErr.message);
     }
@@ -161,6 +164,19 @@ export default function SignUp() {
       </View>
 
       <View style={s.field}>
+        <Text style={s.label}>{T.phoneLabel}</Text>
+        <TextInput
+          style={s.input}
+          placeholder={T.phonePlaceholder}
+          placeholderTextColor="#A9B0BF"
+          keyboardType="phone-pad"
+          value={phone}
+          onChangeText={setPhone}
+        />
+        <Text style={s.hint}>{T.phoneHint}</Text>
+      </View>
+
+      <View style={s.field}>
         <Text style={s.label}>{T.dobLabel}</Text>
         <View style={s.dobRow}>
           <TextInput style={[s.input, s.dobPart]} placeholder={T.day}
@@ -177,23 +193,6 @@ export default function SignUp() {
           <Ionicons name="information-circle-outline" size={14} color={C.textMuted} />
           <Text style={s.hint}>{T.dobHint}</Text>
         </View>
-      </View>
-
-      <View style={s.field}>
-        <View style={s.labelRow}>
-          <Text style={s.label}>{T.occLabel}</Text>
-          <View style={s.optTag}>
-            <Text style={s.optText}>{T.occOptional}</Text>
-          </View>
-        </View>
-        <TextInput
-          style={s.input}
-          placeholder={T.occPlaceholder}
-          placeholderTextColor="#A9B0BF"
-          value={occupation}
-          onChangeText={setOccupation}
-        />
-        <Text style={s.hint}>{T.occHint}</Text>
       </View>
 
       <View style={s.field}>
@@ -250,10 +249,7 @@ const s = StyleSheet.create({
   benefitRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   benefitText: { fontSize: 13, color: C.textSecondary, flex: 1, textAlign: 'right' },
   field: { marginBottom: 18 },
-  labelRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginBottom: 6 },
-  label: { fontSize: 14, fontWeight: '600', textAlign: 'right', color: C.text },
-  optTag: { backgroundColor: C.surface, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
-  optText: { fontSize: 11, color: C.textMuted },
+  label: { fontSize: 14, fontWeight: '600', textAlign: 'right', color: C.text, marginBottom: 6 },
   hint: { fontSize: 12, color: C.textMuted, marginTop: 6, textAlign: 'right' },
   hintRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
   input: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 14, padding: 14, fontSize: 15, textAlign: 'right', color: C.text },

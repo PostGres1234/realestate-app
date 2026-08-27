@@ -1,25 +1,33 @@
 import { useEffect, useState, useRef } from 'react';
-import { View, Text, TextInput, Pressable, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { getDraft, saveDraft, clearDraft, markSeen } from '../../lib/inbox';
+import { placeCall, canCall, getBuyerContact } from '../../lib/calls';
 import { C } from '../../lib/theme';
 
 const T = {
-  back: 'חזרה',
-  placeholder: 'כתבו הודעה...',
-  send: 'שליחה',
-  empty: 'אין עדיין הודעות.',
+  call: 'התקשרות',
+  callTitle: 'שיחה',
+  placeholder: 'הודעה...',
+  empty: 'אין עדיין הודעות',
+  emptyHint: 'ההודעות שלכם יופיעו כאן',
   loadFail: 'לא ניתן לטעון את השיחה',
-  waiting: 'הפנייה נשלחה. תוכלו לכתוב שוב לאחר שהמוכר יגיב.',
+  waiting: 'ממתינים לתגובה של בעל הנכס',
+  today: 'היום',
+  yesterday: 'אתמול',
+  you: 'אתם',
 };
 
 export default function Chat() {
   const { id } = useLocalSearchParams();
   const { user } = useAuth();
   const [conv, setConv] = useState(null);
+  const [prop, setProp] = useState(null);
+  const [buyer, setBuyer] = useState(null);
+  const [callable, setCallable] = useState(false);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -38,10 +46,24 @@ export default function Chat() {
     (async () => {
       const { data: c } = await supabase
         .from('conversations')
-        .select('id, buyer_id, seller_id, intro_sent, unlocked')
+        .select('id, property_id, buyer_id, seller_id, intro_sent, unlocked')
         .eq('id', id)
         .single();
       setConv(c);
+
+      if (c) {
+        const { data: pr } = await supabase
+          .from('properties')
+          .select('title, city, price')
+          .eq('id', c.property_id)
+          .maybeSingle();
+        setProp(pr);
+      }
+
+      if (c && user?.id) {
+        setCallable(await canCall(id, user.id));
+        setBuyer(await getBuyerContact(id, user.id));
+      }
 
       const { data, error } = await supabase
         .from('messages')
@@ -69,7 +91,7 @@ export default function Chat() {
           table: 'messages',
           filter: 'conversation_id=eq.' + id,
         },
-        (payload) => {
+        async (payload) => {
           setMessages((prev) => {
             if (prev.some((m) => m.id === payload.new.id)) return prev;
             return [...prev, payload.new];
@@ -84,7 +106,7 @@ export default function Chat() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [id]);
+  }, [id, user?.id]);
 
   function onChangeText(v) {
     setText(v);
@@ -110,19 +132,47 @@ export default function Chat() {
     }
   }
 
+  async function onCall() {
+    const res = await placeCall(id);
+    if (!res.ok) Alert.alert(T.callTitle, res.message);
+  }
+
   const time = (iso) =>
     new Date(iso).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
 
+  const dayLabel = (iso) => {
+    const d = new Date(iso);
+    const today = new Date();
+    const yest = new Date();
+    yest.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return T.today;
+    if (d.toDateString() === yest.toDateString()) return T.yesterday;
+    return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' });
+  };
+
+  const money = (n) => '\u20AA' + new Intl.NumberFormat('he-IL').format(n);
+
   const isBuyer = conv && user?.id === conv.buyer_id;
   const locked = isBuyer && conv?.intro_sent && !conv?.unlocked;
+
+  const withDates = [];
+  let lastDay = null;
+  messages.forEach((m) => {
+    const label = dayLabel(m.created_at);
+    if (label !== lastDay) {
+      withDates.push({ id: 'sep-' + m.id, sep: true, label });
+      lastDay = label;
+    }
+    withDates.push(m);
+  });
 
   if (err) {
     return (
       <View style={s.center}>
         <Text style={s.errTitle}>{T.loadFail}</Text>
-        <Text style={s.meta}>{err}</Text>
+        <Text style={s.errMeta}>{err}</Text>
         <Pressable onPress={() => router.back()}>
-          <Text style={s.link}>{T.back}</Text>
+          <Text style={s.link}>{T.callTitle}</Text>
         </Pressable>
       </View>
     );
@@ -131,28 +181,75 @@ export default function Chat() {
   return (
     <KeyboardAvoidingView style={s.wrap}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+
       <View style={s.header}>
-        <Pressable onPress={() => router.back()}>
-          <Text style={s.link}>{T.back}</Text>
-        </Pressable>
+        <View style={s.headerTop}>
+          <Pressable style={s.backBtn} onPress={() => router.back()} hitSlop={10}>
+            <Ionicons name="chevron-forward" size={24} color={C.text} />
+          </Pressable>
+
+          <View style={{ flex: 1 }}>
+            <Text style={s.headerTitle} numberOfLines={1}>
+              {buyer ? buyer.full_name : (prop?.title ?? '')}
+            </Text>
+            <Text style={s.headerSub} numberOfLines={1}>
+              {buyer
+                ? (buyer.occupation ?? prop?.city ?? '')
+                : (prop ? prop.city + '  ·  ' + money(prop.price) : '')}
+            </Text>
+          </View>
+
+          {callable ? (
+            <Pressable style={s.callBtn} onPress={onCall} hitSlop={8}>
+              <Ionicons name="call" size={18} color="#fff" />
+            </Pressable>
+          ) : null}
+        </View>
+
+        {buyer?.phone ? (
+          <Pressable style={s.phoneChip} onPress={callable ? onCall : undefined}>
+            <Ionicons name="call-outline" size={13} color={C.primary} />
+            <Text style={s.phoneText}>{buyer.phone}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} size="large" color={C.primary} />
+        <ActivityIndicator style={{ marginTop: 50 }} size="large" color={C.primary} />
       ) : (
         <FlatList
           ref={listRef}
-          data={messages}
+          data={withDates}
           keyExtractor={(m) => m.id}
-          contentContainerStyle={{ padding: 16, gap: 8 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 8, gap: 6 }}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-          ListEmptyComponent={<Text style={s.muted}>{T.empty}</Text>}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={s.emptyBox}>
+              <Ionicons name="chatbubbles-outline" size={44} color={C.textMuted} />
+              <Text style={s.emptyTitle}>{T.empty}</Text>
+              <Text style={s.emptyHint}>{T.emptyHint}</Text>
+            </View>
+          }
           renderItem={({ item }) => {
+            if (item.sep) {
+              return (
+                <View style={s.sepRow}>
+                  <View style={s.sepLine} />
+                  <Text style={s.sepText}>{item.label}</Text>
+                  <View style={s.sepLine} />
+                </View>
+              );
+            }
             const mine = item.sender_id === user?.id;
             return (
-              <View style={[s.bubble, mine ? s.mine : s.theirs]}>
-                <Text style={mine ? s.mineText : s.theirsText}>{item.body}</Text>
-                <Text style={mine ? s.mineTime : s.theirsTime}>{time(item.created_at)}</Text>
+              <View style={[s.bubbleRow, mine ? s.rowMine : s.rowTheirs]}>
+                <View style={[s.bubble, mine ? s.mine : s.theirs]}>
+                  <Text style={mine ? s.mineText : s.theirsText}>{item.body}</Text>
+                  <Text style={mine ? s.mineTime : s.theirsTime}>
+                    {time(item.created_at)}
+                  </Text>
+                </View>
               </View>
             );
           }}
@@ -161,13 +258,17 @@ export default function Chat() {
 
       {locked ? (
         <View style={s.lockedBar}>
-          <Ionicons name="time-outline" size={18} color={C.textMuted} />
+          <Ionicons name="hourglass-outline" size={17} color={C.textMuted} />
           <Text style={s.lockedText}>{T.waiting}</Text>
         </View>
       ) : (
         <View style={s.composer}>
-          <Pressable style={s.sendBtn} onPress={send}>
-            <Text style={s.sendText}>{T.send}</Text>
+          <Pressable
+            style={[s.sendBtn, !text.trim() && s.sendBtnOff]}
+            onPress={send}
+            disabled={!text.trim()}
+          >
+            <Ionicons name="arrow-up" size={20} color="#fff" />
           </Pressable>
           <TextInput
             style={s.input}
@@ -184,24 +285,45 @@ export default function Chat() {
 }
 
 const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: C.page },
+  wrap: { flex: 1, backgroundColor: '#F4F6FA' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 12 },
-  header: { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: C.border, alignItems: 'flex-end' },
-  link: { color: C.primary, fontWeight: '600', fontSize: 15 },
   errTitle: { fontSize: 18, fontWeight: '600', color: C.text },
-  meta: { color: C.textMuted, fontSize: 14, textAlign: 'center' },
-  muted: { color: C.textMuted, textAlign: 'center', marginTop: 40 },
-  bubble: { maxWidth: '78%', padding: 12, borderRadius: 16 },
-  mine: { backgroundColor: C.primary, alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
-  theirs: { backgroundColor: C.surface, alignSelf: 'flex-end', borderBottomRightRadius: 4 },
+  errMeta: { color: C.textMuted, fontSize: 14, textAlign: 'center' },
+  link: { color: C.primary, fontWeight: '600', fontSize: 15 },
+
+  header: { backgroundColor: C.page, paddingTop: 56, paddingBottom: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  headerTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: C.text, textAlign: 'right' },
+  headerSub: { fontSize: 12, color: C.textMuted, textAlign: 'right', marginTop: 2 },
+  callBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#1D9E75', alignItems: 'center', justifyContent: 'center' },
+  phoneChip: { flexDirection: 'row-reverse', alignSelf: 'flex-end', alignItems: 'center', gap: 5, backgroundColor: C.primaryTint, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, marginTop: 10, marginRight: 42 },
+  phoneText: { color: C.primary, fontSize: 12, fontWeight: '700' },
+
+  sepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 10 },
+  sepLine: { flex: 1, height: 1, backgroundColor: '#E3E8F0' },
+  sepText: { fontSize: 11, color: C.textMuted, fontWeight: '600' },
+
+  bubbleRow: { flexDirection: 'row', width: '100%' },
+  rowMine: { justifyContent: 'flex-start' },
+  rowTheirs: { justifyContent: 'flex-end' },
+  bubble: { maxWidth: '80%', paddingHorizontal: 14, paddingTop: 10, paddingBottom: 7, borderRadius: 20 },
+  mine: { backgroundColor: C.primary, borderBottomLeftRadius: 6 },
+  theirs: { backgroundColor: C.page, borderBottomRightRadius: 6, borderWidth: 1, borderColor: '#E8ECF3' },
   mineText: { color: '#fff', fontSize: 15, textAlign: 'right', lineHeight: 21 },
   theirsText: { color: C.text, fontSize: 15, textAlign: 'right', lineHeight: 21 },
-  mineTime: { color: '#cfe0ff', fontSize: 11, marginTop: 4, textAlign: 'left' },
-  theirsTime: { color: C.textMuted, fontSize: 11, marginTop: 4, textAlign: 'left' },
-  composer: { flexDirection: 'row-reverse', gap: 8, padding: 12, paddingBottom: 28, borderTopWidth: 1, borderTopColor: C.border, alignItems: 'flex-end' },
-  input: { flex: 1, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 11, fontSize: 15, textAlign: 'right', color: C.text, maxHeight: 100 },
-  sendBtn: { backgroundColor: C.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 20 },
-  sendText: { color: '#fff', fontWeight: '600' },
-  lockedBar: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 18, paddingBottom: 32, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.surface },
-  lockedText: { color: C.textMuted, fontSize: 13, textAlign: 'center', flex: 1 },
+  mineTime: { color: 'rgba(255,255,255,0.75)', fontSize: 10, marginTop: 3, textAlign: 'left' },
+  theirsTime: { color: C.textMuted, fontSize: 10, marginTop: 3, textAlign: 'left' },
+
+  emptyBox: { alignItems: 'center', marginTop: 70, gap: 10 },
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: C.textSecondary },
+  emptyHint: { fontSize: 13, color: C.textMuted },
+
+  composer: { flexDirection: 'row-reverse', gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 28, backgroundColor: C.page, borderTopWidth: 1, borderTopColor: C.border, alignItems: 'flex-end' },
+  input: { flex: 1, backgroundColor: '#F1F4F9', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 11, fontSize: 15, textAlign: 'right', color: C.text, maxHeight: 110 },
+  sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
+  sendBtnOff: { backgroundColor: '#C3CBD9' },
+
+  lockedBar: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 18, paddingBottom: 32, backgroundColor: C.page, borderTopWidth: 1, borderTopColor: C.border },
+  lockedText: { color: C.textMuted, fontSize: 13 },
 });
