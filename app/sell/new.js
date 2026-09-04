@@ -5,6 +5,8 @@ import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
+import { logSupabase } from '../../lib/logger';
+import { geocodeAddress } from '../../lib/geocode';
 import { C } from '../../lib/theme';
 import LocationInput from '../../components/LocationInput';
 
@@ -32,6 +34,7 @@ const T = {
   hoodPlaceholder: 'התחילו להקליד שם שכונה',
   addressLabel: 'כתובת',
   addressPlaceholder: 'לדוגמה: רחוב הנשיא 12',
+  addressHint: 'כתובת מדויקת תציג את הנכס על המפה',
   roomsLabel: 'חדרים',
   bathsLabel: 'חדרי רחצה',
   areaLabel: 'שטח במ"ר',
@@ -42,6 +45,7 @@ const T = {
   descPlaceholder: 'ספרו על הנכס: מצב, שיפוצים, נוף, חניה...',
   submit: 'פרסום הנכס',
   busy: 'מפרסם...',
+  locating: 'מאתר את הכתובת...',
   uploading: 'מעלה קבצים...',
   missingTitle: 'חסרים פרטים',
   missingBody: 'יש למלא כותרת, מחיר ועיר.',
@@ -163,18 +167,22 @@ export default function NewListing() {
         .from('property-images')
         .upload(path, buffer, { contentType: mime, upsert: false });
 
-      if (upErr) { console.log('upload error', upErr.message); continue; }
+      if (upErr) {
+        logSupabase('listing.upload', upErr, { kind });
+        continue;
+      }
 
       const { data: pub } = supabase.storage
         .from('property-images')
         .getPublicUrl(path);
 
-      await supabase.from('property_images').insert({
+      const { error: rowErr } = await supabase.from('property_images').insert({
         property_id: propertyId,
         url: pub.publicUrl,
         position: i,
         media_type: kind,
       });
+      if (rowErr) logSupabase('listing.imageRow', rowErr, { kind });
     }
   }
 
@@ -183,6 +191,14 @@ export default function NewListing() {
       return Alert.alert(T.missingTitle, T.missingBody);
     }
     setBusy(true);
+    setStage(T.locating);
+
+    const geo = await geocodeAddress({
+      address: address.trim(),
+      city: city.trim(),
+      neighborhood: hood.trim(),
+    });
+
     setStage(T.busy);
 
     const { data, error } = await supabase
@@ -196,6 +212,8 @@ export default function NewListing() {
         city: city.trim(),
         neighborhood: hood.trim() || null,
         address: address.trim() || null,
+        latitude: geo?.latitude ?? null,
+        longitude: geo?.longitude ?? null,
         bedrooms: bedrooms ? Number(bedrooms) : null,
         bathrooms: bathrooms ? Number(bathrooms) : null,
         area_sqm: area ? Number(area) : null,
@@ -212,7 +230,12 @@ export default function NewListing() {
 
     if (error) {
       setBusy(false);
-      console.log('insert error', error.message);
+      logSupabase('listing.create', error, {
+        listingType,
+        hasPhotos: photos.length > 0,
+        hasVideo: !!video,
+        geocoded: !!geo,
+      });
       return Alert.alert(T.failTitle, error.message);
     }
 
@@ -272,36 +295,30 @@ export default function NewListing() {
           value={price}
           onChangeText={setPrice}
         />
-        {listingType === 'rent' ? (
-          <Text style={s.hint}>{T.priceRentHint}</Text>
-        ) : null}
+        {listingType === 'rent' ? <Text style={s.hint}>{T.priceRentHint}</Text> : null}
       </View>
 
       <View style={[s.field, { zIndex: 30 }]}>
         <Text style={s.label}>{T.cityLabel}</Text>
-        <LocationInput
-          value={city}
-          onChangeText={setCity}
-          placeholder={T.cityPlaceholder}
-          kind="city"
-        />
+        <LocationInput value={city} onChangeText={setCity}
+          placeholder={T.cityPlaceholder} kind="city" />
       </View>
 
       <View style={[s.field, { zIndex: 20 }]}>
         <Text style={s.label}>{T.hoodLabel}</Text>
-        <LocationInput
-          value={hood}
-          onChangeText={setHood}
-          placeholder={T.hoodPlaceholder}
-          kind="neighborhood"
-          parentCity={city.trim() || undefined}
-        />
+        <LocationInput value={hood} onChangeText={setHood}
+          placeholder={T.hoodPlaceholder} kind="neighborhood"
+          parentCity={city.trim() || undefined} />
       </View>
 
       <View style={s.field}>
         <Text style={s.label}>{T.addressLabel}</Text>
         <TextInput style={s.input} placeholder={T.addressPlaceholder}
           placeholderTextColor="#A9B0BF" value={address} onChangeText={setAddress} />
+        <View style={s.hintRow}>
+          <Ionicons name="location-outline" size={13} color={C.textMuted} />
+          <Text style={s.hint}>{T.addressHint}</Text>
+        </View>
       </View>
 
       <View style={s.row}>
@@ -326,11 +343,8 @@ export default function NewListing() {
         <Text style={s.label}>{T.typeLabel}</Text>
         <View style={s.chips}>
           {TYPES.map((t) => (
-            <Pressable
-              key={t.key}
-              style={[s.chip, type === t.key && s.chipOn]}
-              onPress={() => setType(t.key)}
-            >
+            <Pressable key={t.key} style={[s.chip, type === t.key && s.chipOn]}
+              onPress={() => setType(t.key)}>
               <Text style={type === t.key ? s.chipTextOn : s.chipText}>{t.label}</Text>
             </Pressable>
           ))}
@@ -344,11 +358,8 @@ export default function NewListing() {
           {FEATURES.map((x) => {
             const on = !!feats[x.key];
             return (
-              <Pressable
-                key={x.key}
-                style={[s.feature, on && s.featureOn]}
-                onPress={() => toggleFeat(x.key)}
-              >
+              <Pressable key={x.key} style={[s.feature, on && s.chipOn]}
+                onPress={() => toggleFeat(x.key)}>
                 <Ionicons name={on ? 'checkmark-circle' : x.icon} size={17}
                   color={on ? '#fff' : C.primary} />
                 <Text style={on ? s.chipTextOn : s.chipText}>{x.label}</Text>
@@ -435,6 +446,7 @@ const s = StyleSheet.create({
   rowField: { flex: 1 },
   label: { fontSize: 14, fontWeight: '600', marginBottom: 6, textAlign: 'right', color: C.text },
   hint: { fontSize: 12, color: C.textMuted, marginTop: 6, textAlign: 'right' },
+  hintRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
   input: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 14, padding: 14, fontSize: 15, textAlign: 'right', color: C.text },
   textarea: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 14, padding: 14, fontSize: 15, textAlign: 'right', color: C.text, minHeight: 120, textAlignVertical: 'top' },
   segment: { flexDirection: 'row-reverse', backgroundColor: C.surface, borderRadius: 14, padding: 4 },
@@ -456,7 +468,6 @@ const s = StyleSheet.create({
   chipText: { color: C.textSecondary, fontSize: 14 },
   chipTextOn: { color: '#fff', fontSize: 14, fontWeight: '600' },
   feature: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10 },
-  featureOn: { backgroundColor: C.primary, borderColor: C.primary },
   btn: { backgroundColor: C.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 8 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
 });

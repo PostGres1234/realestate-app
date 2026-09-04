@@ -1,12 +1,12 @@
 import { View, Text, Pressable, Alert, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { useAuth } from '../lib/auth';
 import { C } from '../lib/theme';
 
 const T = {
   home: 'בית',
-  saved: 'שמורים',
+  assistant: 'יועץ',
   add: 'הוספה',
   messages: 'הודעות',
   profile: 'פרופיל',
@@ -18,6 +18,7 @@ const T = {
 
 export default function TabBar({ active, unread = 0 }) {
   const { user } = useAuth();
+  const pathname = usePathname();
 
   function needLogin() {
     Alert.alert(T.needLoginTitle, T.needLoginBody, [
@@ -28,14 +29,20 @@ export default function TabBar({ active, unread = 0 }) {
 
   function go(tab) {
     if (tab.auth && !user) return needLogin();
-    if (tab.push) router.push(tab.path);
-    else router.replace(tab.path);
+    if (pathname === tab.path) return;
+
+    if (tab.path === '/') {
+      router.dismissAll?.();
+      router.replace('/');
+      return;
+    }
+    router.push(tab.path);
   }
 
   const tabs = [
     { key: 'home', icon: 'home', label: T.home, path: '/', auth: false },
-    { key: 'saved', icon: 'heart', label: T.saved, path: '/saved', auth: true },
-    { key: 'add', icon: 'add-circle', label: T.add, path: '/sell/new', auth: true, push: true },
+    { key: 'assistant', icon: 'sparkles', label: T.assistant, path: '/assistant', auth: true },
+    { key: 'add', icon: 'add-circle', label: T.add, path: '/sell/new', auth: true },
     { key: 'messages', icon: 'chatbubble', label: T.messages, path: '/messages', auth: true, badge: unread },
     { key: 'profile', icon: 'person', label: T.profile, path: user ? '/account' : '/(auth)/login', auth: false },
   ];
@@ -45,7 +52,12 @@ export default function TabBar({ active, unread = 0 }) {
       {tabs.map((t) => {
         const on = active === t.key;
         return (
-          <Pressable key={t.key} style={s.tab} onPress={() => go(t)}>
+          <Pressable
+            key={t.key}
+            style={s.tab}
+            onPress={() => go(t)}
+            android_ripple={{ color: 'rgba(31,111,235,0.1)', borderless: true, radius: 34 }}
+          >
             <View>
               <Ionicons
                 name={on ? t.icon : (t.icon + '-outline')}
@@ -58,7 +70,7 @@ export default function TabBar({ active, unread = 0 }) {
                 </View>
               ) : null}
             </View>
-            <Text style={[s.label, on && { color: C.primary }]}>{t.label}</Text>
+            <Text style={[s.label, on && s.labelOn]}>{t.label}</Text>
           </Pressable>
         );
       })}
@@ -75,8 +87,9 @@ const s = StyleSheet.create({
     paddingBottom: 24,
     backgroundColor: C.page,
   },
-  tab: { flex: 1, alignItems: 'center', gap: 3 },
+  tab: { flex: 1, alignItems: 'center', gap: 3, paddingVertical: 2 },
   label: { fontSize: 10, color: C.textMuted },
+  labelOn: { color: C.primary, fontWeight: '700' },
   badge: {
     position: 'absolute', top: -4, left: -10,
     backgroundColor: C.danger, minWidth: 16, height: 16,

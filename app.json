@@ -19,7 +19,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.naim_jubran5.realestateapp"
     },
     "web": {
       "output": "static",
@@ -39,11 +40,22 @@
           }
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-font",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "bf30958d-1067-479a-a0b3-59b16289f043"
+      }
+    },
+    "owner": "naim_jubran5"
   }
 }

@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { getDraft, saveDraft, clearDraft, markSeen } from '../../lib/inbox';
 import { placeCall, canCall, getBuyerContact } from '../../lib/calls';
+import { logSupabase } from '../../lib/logger';
 import { C } from '../../lib/theme';
 
 const T = {
@@ -15,10 +16,10 @@ const T = {
   empty: 'אין עדיין הודעות',
   emptyHint: 'ההודעות שלכם יופיעו כאן',
   loadFail: 'לא ניתן לטעון את השיחה',
+  back: 'חזרה',
   waiting: 'ממתינים לתגובה של בעל הנכס',
   today: 'היום',
   yesterday: 'אתמול',
-  you: 'אתם',
 };
 
 export default function Chat() {
@@ -44,11 +45,13 @@ export default function Chat() {
 
   useEffect(() => {
     (async () => {
-      const { data: c } = await supabase
+      const { data: c, error: convErr } = await supabase
         .from('conversations')
         .select('id, property_id, buyer_id, seller_id, intro_sent, unlocked')
         .eq('id', id)
         .single();
+
+      if (convErr) logSupabase('chat.conversation', convErr, { conversationId: id });
       setConv(c);
 
       if (c) {
@@ -72,7 +75,7 @@ export default function Chat() {
         .order('created_at', { ascending: true });
 
       if (error) {
-        console.log('chat error', error.message);
+        logSupabase('chat.load', error, { conversationId: id });
         setErr(error.message);
         setLoading(false);
         return;
@@ -101,6 +104,7 @@ export default function Chat() {
             if (payload.new.sender_id === c.seller_id) return { ...c, unlocked: true };
             return c;
           });
+          if (user?.id) setCallable(await canCall(id, user.id));
         }
       )
       .subscribe();
@@ -126,7 +130,7 @@ export default function Chat() {
     });
 
     if (error) {
-      console.log('send error', error.message);
+      logSupabase('chat.send', error, { conversationId: id });
       setText(body);
       saveDraft(id, body);
     }
@@ -172,7 +176,7 @@ export default function Chat() {
         <Text style={s.errTitle}>{T.loadFail}</Text>
         <Text style={s.errMeta}>{err}</Text>
         <Pressable onPress={() => router.back()}>
-          <Text style={s.link}>{T.callTitle}</Text>
+          <Text style={s.link}>{T.back}</Text>
         </Pressable>
       </View>
     );
@@ -290,7 +294,6 @@ const s = StyleSheet.create({
   errTitle: { fontSize: 18, fontWeight: '600', color: C.text },
   errMeta: { color: C.textMuted, fontSize: 14, textAlign: 'center' },
   link: { color: C.primary, fontWeight: '600', fontSize: 15 },
-
   header: { backgroundColor: C.page, paddingTop: 56, paddingBottom: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: C.border },
   headerTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
@@ -299,11 +302,9 @@ const s = StyleSheet.create({
   callBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#1D9E75', alignItems: 'center', justifyContent: 'center' },
   phoneChip: { flexDirection: 'row-reverse', alignSelf: 'flex-end', alignItems: 'center', gap: 5, backgroundColor: C.primaryTint, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, marginTop: 10, marginRight: 42 },
   phoneText: { color: C.primary, fontSize: 12, fontWeight: '700' },
-
   sepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 10 },
   sepLine: { flex: 1, height: 1, backgroundColor: '#E3E8F0' },
   sepText: { fontSize: 11, color: C.textMuted, fontWeight: '600' },
-
   bubbleRow: { flexDirection: 'row', width: '100%' },
   rowMine: { justifyContent: 'flex-start' },
   rowTheirs: { justifyContent: 'flex-end' },
@@ -314,16 +315,13 @@ const s = StyleSheet.create({
   theirsText: { color: C.text, fontSize: 15, textAlign: 'right', lineHeight: 21 },
   mineTime: { color: 'rgba(255,255,255,0.75)', fontSize: 10, marginTop: 3, textAlign: 'left' },
   theirsTime: { color: C.textMuted, fontSize: 10, marginTop: 3, textAlign: 'left' },
-
   emptyBox: { alignItems: 'center', marginTop: 70, gap: 10 },
   emptyTitle: { fontSize: 16, fontWeight: '600', color: C.textSecondary },
   emptyHint: { fontSize: 13, color: C.textMuted },
-
   composer: { flexDirection: 'row-reverse', gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 28, backgroundColor: C.page, borderTopWidth: 1, borderTopColor: C.border, alignItems: 'flex-end' },
   input: { flex: 1, backgroundColor: '#F1F4F9', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 11, fontSize: 15, textAlign: 'right', color: C.text, maxHeight: 110 },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
   sendBtnOff: { backgroundColor: '#C3CBD9' },
-
   lockedBar: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 18, paddingBottom: 32, backgroundColor: C.page, borderTopWidth: 1, borderTopColor: C.border },
   lockedText: { color: C.textMuted, fontSize: 13 },
 });

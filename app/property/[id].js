@@ -79,7 +79,9 @@ export default function PropertyDetail() {
         setErr(error.message);
         return;
       }
-      setP(data);
+     setP(data);
+
+      if (user) supabase.rpc('track_view', { p_property: id });
 
       const { data: m } = await supabase
         .from('property_images')

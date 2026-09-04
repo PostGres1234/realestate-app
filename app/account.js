@@ -63,6 +63,8 @@ export default function Account() {
     { icon: 'add-circle-outline', label: T.addListing, hint: T.addListingHint, path: '/sell/new' },
     { icon: 'options-outline', label: T.prefs, hint: T.prefsHint, path: '/preferences' },
     { icon: 'heart-outline', label: T.saved, hint: T.savedHint, path: '/saved' },
+    { icon: 'time-outline', label: 'נצפו לאחרונה', hint: 'נכסים שפתחתם', path: '/recent' },
+    { icon: 'sparkles-outline', label: 'יועץ הדיור', hint: 'עזרה במציאת אזור מתאים', path: '/assistant' },
   ];
 
   return (

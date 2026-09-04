@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, Alert, StyleSheet } from 
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../../lib/supabase';
+import { logSupabase } from '../../lib/logger';
 import { C } from '../../lib/theme';
 
 const MIN_AGE = 18;
@@ -116,6 +117,7 @@ export default function SignUp() {
 
     if (error) {
       setBusy(false);
+      logSupabase('auth.signup', error);
       return Alert.alert(T.failTitle, error.message);
     }
 
@@ -126,7 +128,7 @@ export default function SignUp() {
         phone: phone.trim(),
         date_of_birth: dobResult.iso,
       });
-      if (profErr) console.log('profile error', profErr.message);
+      if (profErr) logSupabase('auth.profile', profErr);
     }
 
     setBusy(false);
@@ -153,26 +155,16 @@ export default function SignUp() {
 
       <View style={s.field}>
         <Text style={s.label}>{T.nameLabel}</Text>
-        <TextInput
-          style={s.input}
-          placeholder={T.namePlaceholder}
-          placeholderTextColor="#A9B0BF"
-          value={fullName}
-          onChangeText={setFullName}
-        />
+        <TextInput style={s.input} placeholder={T.namePlaceholder}
+          placeholderTextColor="#A9B0BF" value={fullName} onChangeText={setFullName} />
         <Text style={s.hint}>{T.nameHint}</Text>
       </View>
 
       <View style={s.field}>
         <Text style={s.label}>{T.phoneLabel}</Text>
-        <TextInput
-          style={s.input}
-          placeholder={T.phonePlaceholder}
-          placeholderTextColor="#A9B0BF"
-          keyboardType="phone-pad"
-          value={phone}
-          onChangeText={setPhone}
-        />
+        <TextInput style={s.input} placeholder={T.phonePlaceholder}
+          placeholderTextColor="#A9B0BF" keyboardType="phone-pad"
+          value={phone} onChangeText={setPhone} />
         <Text style={s.hint}>{T.phoneHint}</Text>
       </View>
 
@@ -197,29 +189,17 @@ export default function SignUp() {
 
       <View style={s.field}>
         <Text style={s.label}>{T.emailLabel}</Text>
-        <TextInput
-          style={s.input}
-          placeholder={T.emailPlaceholder}
-          placeholderTextColor="#A9B0BF"
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
+        <TextInput style={s.input} placeholder={T.emailPlaceholder}
+          placeholderTextColor="#A9B0BF" autoCapitalize="none" autoCorrect={false}
+          keyboardType="email-address" value={email} onChangeText={setEmail} />
       </View>
 
       <View style={s.field}>
         <Text style={s.label}>{T.passLabel}</Text>
         <View style={s.passWrap}>
-          <TextInput
-            style={s.passInput}
-            placeholder={T.passPlaceholder}
-            placeholderTextColor="#A9B0BF"
-            secureTextEntry={!showPass}
-            value={password}
-            onChangeText={setPassword}
-          />
+          <TextInput style={s.passInput} placeholder={T.passPlaceholder}
+            placeholderTextColor="#A9B0BF" secureTextEntry={!showPass}
+            value={password} onChangeText={setPassword} />
           <Pressable style={s.eye} onPress={() => setShowPass((v) => !v)}>
             <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'}
               size={21} color={C.textMuted} />
