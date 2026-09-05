@@ -1,3 +1,4 @@
+import BackBar from '../../../components/BackBar';
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -243,16 +244,12 @@ export default function EditListing() {
   }
 
   return (
-    <ScrollView
-      style={s.wrap}
-      contentContainerStyle={{ padding: 20, paddingTop: 56, paddingBottom: 80 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Pressable onPress={() => router.back()} style={{ alignItems: 'flex-end' }}>
-        <Text style={s.link}>{T.back}</Text>
-      </Pressable>
-
-      <Text style={s.h1}>{T.heading}</Text>
+    <View style={s.wrap}>
+      <BackBar title={T.heading} />
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 80 }}
+        keyboardShouldPersistTaps="handled"
+      >
 
       <View style={s.field}>
         <Text style={s.label}>{T.titleLabel}</Text>
@@ -403,10 +400,10 @@ export default function EditListing() {
           <Text style={s.btnText}>{T.save}</Text>
         )}
       </Pressable>
-    </ScrollView>
+  </ScrollView>
+    </View>
   );
 }
-
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: C.page },
   link: { color: C.primary, fontWeight: '600', fontSize: 15 },

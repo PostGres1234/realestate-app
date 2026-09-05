@@ -6,18 +6,18 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
 import { C } from '../lib/theme';
+import BackBar from '../components/BackBar';
 
 const T = {
-  heading: 'נכסים חדשים בשבילכם',
+  heading: 'נכסים בשבילכם',
   sub: 'לפי ההעדפות שהגדרתם',
-  back: 'חזרה',
   empty: 'אין נכסים חדשים כרגע',
-  emptyHint: 'נעדכן אתכם כשיתפרסם נכס שמתאים להעדפות שלכם.',
+  emptyHint: 'נעדכן אתכם כשיתפרסם נכס שמתאים להעדפות שלכם',
   editPrefs: 'עריכת העדפות',
   rooms: 'חד׳',
   sqm: 'מ"ר',
   perMonth: 'לחודש',
-  results: 'תוצאות',
+  results: 'נכסים',
 };
 
 const TYPES = {
@@ -72,15 +72,17 @@ export default function Matches() {
 
   return (
     <View style={s.wrap}>
-      <View style={s.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.h1}>{T.heading}</Text>
-          <Text style={s.sub}>{T.sub}</Text>
-        </View>
-        <Pressable onPress={() => router.replace('/')}>
-          <Text style={s.link}>{T.back}</Text>
-        </Pressable>
-      </View>
+      <BackBar
+        title={T.heading}
+        subtitle={T.sub}
+        right={
+          items.length ? (
+            <View style={s.countPill}>
+              <Text style={s.countText}>{items.length}</Text>
+            </View>
+          ) : null
+        }
+      />
 
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} size="large" color={C.primary} />
@@ -88,11 +90,11 @@ export default function Matches() {
         <FlatList
           data={items}
           keyExtractor={(x) => x.id}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 24, gap: 18 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24, gap: 16 }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={s.emptyBox}>
-              <Ionicons name="notifications-off-outline" size={50} color={C.textMuted} />
+              <Ionicons name="sparkles-outline" size={50} color={C.textMuted} />
               <Text style={s.emptyTitle}>{T.empty}</Text>
               <Text style={s.emptyHint}>{T.emptyHint}</Text>
               <Pressable style={s.btnOutline} onPress={() => router.push('/preferences')}>
@@ -161,11 +163,9 @@ export default function Matches() {
 }
 
 const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: '#F4F6FA', paddingTop: 56 },
-  header: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingBottom: 14, backgroundColor: C.page, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 },
-  h1: { fontSize: 24, fontWeight: '700', color: C.text, textAlign: 'right' },
-  sub: { fontSize: 12, color: C.textMuted, textAlign: 'right', marginTop: 3 },
-  link: { color: C.primary, fontWeight: '600', fontSize: 15, marginTop: 6 },
+  wrap: { flex: 1, backgroundColor: '#F4F6FA' },
+  countPill: { backgroundColor: C.primaryTint, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  countText: { color: C.primary, fontSize: 12, fontWeight: '700' },
   card: { borderRadius: 18, backgroundColor: C.page, overflow: 'hidden', shadowColor: '#1A1D26', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
   imgWrap: { position: 'relative' },
   img: { width: '100%', height: 180, backgroundColor: C.placeholder },
@@ -183,7 +183,7 @@ const s = StyleSheet.create({
   spec: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
   specText: { fontSize: 12, color: C.textSecondary, fontWeight: '600' },
   divider: { width: 1, height: 14, backgroundColor: '#E6EAF2' },
-  emptyBox: { alignItems: 'center', marginTop: 60, gap: 14 },
+  emptyBox: { alignItems: 'center', marginTop: 70, gap: 12 },
   emptyTitle: { fontSize: 16, fontWeight: '600', color: C.textSecondary },
   emptyHint: { fontSize: 13, color: C.textMuted, textAlign: 'center', lineHeight: 20, paddingHorizontal: 30 },
   btnOutline: { borderWidth: 1, borderColor: C.primary, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 13, marginTop: 6 },

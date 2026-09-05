@@ -1,3 +1,4 @@
+import BackBar from '../../components/BackBar';
 import { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Modal, ActivityIndicator, Alert, Image, Dimensions, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -80,8 +81,13 @@ export default function PropertyDetail() {
         return;
       }
      setP(data);
+     
 
-      if (user) supabase.rpc('track_view', { p_property: id });
+      if (user) {
+        const { error: viewErr } = await supabase.rpc('track_view', { p_property: id });
+        if (viewErr) console.log('track_view error', viewErr.message);
+        else console.log('track_view ok', id);
+      }
 
       const { data: m } = await supabase
         .from('property_images')
@@ -193,9 +199,7 @@ export default function PropertyDetail() {
         <View style={s.noMedia} />
       )}
 
-      <Pressable style={s.backBtn} onPress={() => router.back()}>
-        <Text style={s.backText}>{T.back}</Text>
-      </Pressable>
+      <BackBar floating />
 
       <View style={s.body}>
         <View style={s.dealTag}>
@@ -292,8 +296,7 @@ const s = StyleSheet.create({
   errTitle: { fontSize: 18, fontWeight: '600', color: C.text },
   link: { color: C.primary, fontWeight: '600', fontSize: 16 },
   noMedia: { width: W, height: 120, backgroundColor: C.surface },
-  backBtn: { position: 'absolute', top: 56, right: 16, backgroundColor: 'rgba(255,255,255,0.93)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
-  backText: { color: C.primary, fontWeight: '600', fontSize: 14 },
+  
   body: { padding: 20 },
   dealTag: { alignSelf: 'flex-end', backgroundColor: C.primaryTint, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 8 },
   dealText: { color: C.primary, fontSize: 12, fontWeight: '700' },

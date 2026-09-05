@@ -1,3 +1,4 @@
+import TabBar from '../components/TabBar';
 import { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, FlatList, Image, KeyboardAvoidingView, Platform, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,20 +7,20 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
 import { C } from '../lib/theme';
-import TabBar from '../components/TabBar';
+
 
 const T = {
-  heading: 'יועץ הדיור',
-  sub: 'ספרו לי על עצמכם ואמצא לכם אזור מתאים',
-  placeholder: 'כתבו כאן...',
+  heading: 'ג׳ימי',
+  sub: 'היועץ שיעזור לכם למצוא איפה לגור',
+  placeholder: 'כתבו לג׳ימי...',
   thinking: 'חושב...',
-  guest: 'התחברו כדי להשתמש ביועץ',
+  guest: 'התחברו כדי לדבר עם ג׳ימי',
   login: 'התחברות',
   restart: 'שיחה חדשה',
   perMonth: 'לחודש',
   rooms: 'חד׳',
   sqm: 'מ"ר',
-  opener: 'שלום! אני כאן כדי לעזור לכם למצוא איפה כדאי לגור.\n\nבואו נתחיל מהדברים שמשפיעים על היום-יום: איפה אתם עובדים, ואיך אתם מגיעים לשם?',
+  opener: 'היי, אני ג׳ימי. אני כאן כדי לעזור לכם להבין איפה כדאי לגור.\n\nבואו נתחיל מהדברים שמשפיעים על היום-יום: איפה אתם עובדים, ואיך אתם מגיעים לשם?',
   starters: [
     'אני עובד בטכניון',
     'יש לי ילדים בבית ספר',
@@ -77,7 +78,7 @@ export default function Assistant() {
 
     try {
       const { data: sess } = await supabase.auth.getSession();
-      const url = process.env.EXPO_PUBLIC_SUPABASE_URL + '/functions/v1/assistant';
+      const url = process.env.EXPO_PUBLIC_SUPABASE_URL + '/functions/v1/clever-worker';
 
       const res = await fetch(url, {
         method: 'POST',

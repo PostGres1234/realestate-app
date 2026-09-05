@@ -13,7 +13,7 @@ import FilterSheet, { FEATURES } from '../components/FilterSheet';
 import MatchesBanner from '../components/MatchesBanner';
 
 const T = {
-  locationLabel: 'מיקום',
+  locationLabel: 'מחפשים ב־',
   allCountry: 'כל הארץ',
   searchPlaceholder: 'חיפוש עיר או שכונה...',
   sale: 'למכירה',
@@ -214,14 +214,17 @@ export default function Browse() {
             </Pressable>
 
             <View style={s.icons}>
-              <Pressable style={s.iconBtn} onPress={() => router.push('/map')}>
-                <Ionicons name="map-outline" size={19} color={C.primary} />
-              </Pressable>
-              <Pressable style={s.iconBtn} onPress={() => router.push('/notifications')}>
-                <Ionicons name="notifications-outline" size={19} color={C.primary} />
-                {unread > 0 ? <View style={s.bellDot} /> : null}
-              </Pressable>
-            </View>
+            <Pressable style={s.iconBtn} onPress={() => router.push('/saved')}>
+              <Ionicons name="heart-outline" size={19} color={C.primary} />
+            </Pressable>
+            <Pressable style={s.iconBtn} onPress={() => router.push('/map')}>
+              <Ionicons name="map-outline" size={19} color={C.primary} />
+            </Pressable>
+            <Pressable style={s.iconBtn} onPress={() => router.push('/notifications')}>
+              <Ionicons name="notifications-outline" size={19} color={C.primary} />
+              {unread > 0 ? <View style={s.bellDot} /> : null}
+            </Pressable>
+          </View>
           </View>
 
           <View style={s.segment}>

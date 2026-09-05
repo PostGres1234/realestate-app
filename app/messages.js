@@ -1,17 +1,21 @@
 import { useState, useCallback } from 'react';
 import { View, Text, FlatList, Pressable, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { getSeenMap } from '../lib/inbox';
+import { logSupabase } from '../lib/logger';
 import { C } from '../lib/theme';
+import BackBar from '../components/BackBar';
 import TabBar from '../components/TabBar';
 
 const T = {
   heading: 'הודעות',
-  back: 'חזרה לנכסים',
-  empty: 'אין לכם שיחות עדיין.',
-  guest: 'התחברו כדי לראות את ההודעות שלכם.',
+  empty: 'אין לכם שיחות עדיין',
+  emptyHint: 'שיחות עם בעלי נכסים יופיעו כאן',
+  guest: 'התחברו כדי לראות את ההודעות שלכם',
+  login: 'התחברות',
   asSeller: 'כמוכר',
   asBuyer: 'כקונה',
 };
@@ -30,7 +34,7 @@ export default function Messages() {
       .select('id, property_id, buyer_id, seller_id, created_at');
 
     if (error) {
-      console.log('inbox error', error.message);
+      logSupabase('inbox.load', error);
       setLoading(false);
       setRefreshing(false);
       return;
@@ -92,7 +96,6 @@ export default function Messages() {
     });
 
     const withMessages = enriched.filter((c) => c.preview !== null);
-
     withMessages.sort((a, b) => new Date(b.sortKey) - new Date(a.sortKey));
 
     setRows(withMessages);
@@ -115,36 +118,43 @@ export default function Messages() {
 
   if (!user) {
     return (
-      <View style={s.center}>
-        <Text style={s.muted}>{T.guest}</Text>
-        <Pressable onPress={() => router.replace('/')}>
-          <Text style={s.link}>{T.back}</Text>
-        </Pressable>
+      <View style={s.wrap}>
+        <BackBar title={T.heading} />
+        <View style={s.center}>
+          <Ionicons name="chatbubbles-outline" size={54} color={C.textMuted} />
+          <Text style={s.emptyTitle}>{T.guest}</Text>
+          <Pressable style={s.btn} onPress={() => router.push('/subscribe')}>
+            <Text style={s.btnText}>{T.login}</Text>
+          </Pressable>
+        </View>
+        <TabBar active="messages" />
       </View>
     );
   }
 
   return (
     <View style={s.wrap}>
-      <View style={s.header}>
-        <Text style={s.h1}>{T.heading}</Text>
-        <Pressable onPress={() => router.replace('/')}>
-          <Text style={s.link}>{T.back}</Text>
-        </Pressable>
-      </View>
+      <BackBar title={T.heading} />
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} size="large" />
+        <ActivityIndicator style={{ marginTop: 40 }} size="large" color={C.primary} />
       ) : (
         <FlatList
           data={rows}
           keyExtractor={(r) => r.id}
           contentContainerStyle={{ padding: 16, gap: 12 }}
+          showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing}
+            <RefreshControl refreshing={refreshing} tintColor={C.primary}
               onRefresh={() => { setRefreshing(true); load(); }} />
           }
-          ListEmptyComponent={<Text style={s.muted}>{T.empty}</Text>}
+          ListEmptyComponent={
+            <View style={s.emptyBox}>
+              <Ionicons name="chatbubbles-outline" size={50} color={C.textMuted} />
+              <Text style={s.emptyTitle}>{T.empty}</Text>
+              <Text style={s.emptyHint}>{T.emptyHint}</Text>
+            </View>
+          }
           renderItem={({ item }) => (
             <Pressable style={s.card} onPress={() => router.push('/chat/' + item.id)}>
               <View style={s.topRow}>
@@ -173,27 +183,29 @@ export default function Messages() {
           )}
         />
       )}
-      <TabBar active="messages" />
+
+      <TabBar active="messages" unread={0} />
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  wrap: { flex: 1, paddingTop: 60, backgroundColor: '#fff' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, padding: 24 },
-  header: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 },
-  h1: { fontSize: 28, fontWeight: '700', textAlign: 'right' },
-  link: { color: '#1f6feb', fontWeight: '600' },
-  card: { borderWidth: 1, borderColor: '#eee', borderRadius: 12, padding: 16, backgroundColor: '#fafafa' },
+  wrap: { flex: 1, backgroundColor: '#F4F6FA' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 14, padding: 24 },
+  card: { borderRadius: 16, backgroundColor: C.page, padding: 16, shadowColor: '#1A1D26', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 8, elevation: 2 },
   topRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  title: { fontSize: 16, fontWeight: '600', textAlign: 'right', flex: 1 },
-  badge: { backgroundColor: '#e5484d', minWidth: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  title: { fontSize: 16, fontWeight: '700', color: C.text, textAlign: 'right', flex: 1 },
+  badge: { backgroundColor: C.danger, minWidth: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  meta: { color: '#666', fontSize: 14, marginTop: 2, textAlign: 'right' },
-  price: { color: '#1f6feb', fontWeight: '700', marginTop: 4, textAlign: 'right' },
-  preview: { color: '#444', fontSize: 14, marginTop: 8, textAlign: 'right' },
-  bottomRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 8 },
-  role: { color: '#999', fontSize: 12 },
-  time: { color: '#999', fontSize: 12 },
-  muted: { color: '#666', textAlign: 'center', marginTop: 40 },
+  meta: { color: C.textMuted, fontSize: 13, marginTop: 3, textAlign: 'right' },
+  price: { color: C.primary, fontWeight: '800', fontSize: 16, marginTop: 5, textAlign: 'right' },
+  preview: { color: C.textSecondary, fontSize: 14, marginTop: 9, textAlign: 'right' },
+  bottomRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 10 },
+  role: { color: C.textMuted, fontSize: 12 },
+  time: { color: C.textMuted, fontSize: 12 },
+  emptyBox: { alignItems: 'center', marginTop: 70, gap: 10 },
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: C.textSecondary, textAlign: 'center' },
+  emptyHint: { fontSize: 13, color: C.textMuted },
+  btn: { backgroundColor: C.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 },
+  btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
 });

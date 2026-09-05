@@ -4,12 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
+import { logSupabase } from '../lib/logger';
 import { C } from '../lib/theme';
+import BackBar from '../components/BackBar';
 import MultiCityInput from '../components/MultiCityInput';
 
 const T = {
   heading: 'ההעדפות שלי',
-  back: 'חזרה',
   intro: 'נעדכן אתכם כשיתפרסם נכס שמתאים להעדפות שלכם.',
   dealLabel: 'סוג העסקה',
   dealAny: 'הכל',
@@ -77,11 +78,13 @@ export default function Preferences() {
 
   const load = useCallback(async () => {
     if (!user) { setLoading(false); return; }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('preferences')
       .select('*')
       .eq('user_id', user.id)
       .maybeSingle();
+
+    if (error) logSupabase('prefs.load', error);
 
     if (data) {
       setDeal(data.listing_type ?? 'any');
@@ -147,148 +150,147 @@ export default function Preferences() {
     setBusy(false);
 
     if (error) {
-      console.log('prefs error', error.message);
+      logSupabase('prefs.save', error);
       return Alert.alert(T.failTitle, error.message);
     }
     Alert.alert(T.savedTitle, T.savedBody);
-    router.replace('/');
+    router.back();
   }
 
   if (loading) {
-    return <ActivityIndicator style={{ marginTop: 80 }} size="large" color={C.primary} />;
+    return (
+      <View style={s.wrap}>
+        <BackBar title={T.heading} />
+        <ActivityIndicator style={{ marginTop: 40 }} size="large" color={C.primary} />
+      </View>
+    );
   }
 
   return (
-    <ScrollView
-      style={s.wrap}
-      contentContainerStyle={{ padding: 20, paddingTop: 56, paddingBottom: 60 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Pressable onPress={() => router.back()} style={{ alignItems: 'flex-end' }}>
-        <Text style={s.link}>{T.back}</Text>
-      </Pressable>
+    <View style={s.wrap}>
+      <BackBar title={T.heading} subtitle={T.intro} />
 
-      <Text style={s.h1}>{T.heading}</Text>
-      <Text style={s.intro}>{T.intro}</Text>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.dealLabel}</Text>
-        <View style={s.segment}>
-          {DEALS.map((d) => (
-            <Pressable
-              key={d.key}
-              style={[s.segBtn, deal === d.key && s.segOn]}
-              onPress={() => setDeal(d.key)}
-            >
-              <Text style={deal === d.key ? s.segTextOn : s.segText}>{d.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      <View style={[s.field, { zIndex: 20 }]}>
-        <Text style={s.label}>{T.cityLabel}</Text>
-        <View style={{ flexDirection: 'row-reverse' }}>
-          <MultiCityInput
-            cities={cities}
-            setCities={setCities}
-            placeholder={T.cityPlaceholder}
-          />
-        </View>
-        <Text style={s.hint}>{T.cityHint}</Text>
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.typeLabel}</Text>
-        <View style={s.chips}>
-          {TYPES.map((t) => (
-            <Pressable
-              key={t.label}
-              style={[s.chip, ptype === t.key && s.chipOn]}
-              onPress={() => setPtype(t.key)}
-            >
-              <Text style={ptype === t.key ? s.chipTextOn : s.chipText}>{t.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.priceLabel}</Text>
-        <View style={s.pair}>
-          <TextInput style={s.input} placeholder={T.from} placeholderTextColor="#A9B0BF"
-            keyboardType="numeric" value={minPrice} onChangeText={setMinPrice} />
-          <TextInput style={s.input} placeholder={T.to} placeholderTextColor="#A9B0BF"
-            keyboardType="numeric" value={maxPrice} onChangeText={setMaxPrice} />
-        </View>
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.roomsLabel}</Text>
-        <View style={s.pair}>
-          <TextInput style={s.input} placeholder={T.minShort} placeholderTextColor="#A9B0BF"
-            keyboardType="numeric" value={minRooms} onChangeText={setMinRooms} />
-          <TextInput style={s.input} placeholder={T.maxShort} placeholderTextColor="#A9B0BF"
-            keyboardType="numeric" value={maxRooms} onChangeText={setMaxRooms} />
-        </View>
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.bathsLabel}</Text>
-        <View style={s.pair}>
-          <TextInput style={s.input} placeholder={T.minShort} placeholderTextColor="#A9B0BF"
-            keyboardType="numeric" value={minBaths} onChangeText={setMinBaths} />
-          <TextInput style={s.input} placeholder={T.maxShort} placeholderTextColor="#A9B0BF"
-            keyboardType="numeric" value={maxBaths} onChangeText={setMaxBaths} />
-        </View>
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.featuresLabel}</Text>
-        <Text style={s.hint}>{T.featuresHint}</Text>
-        <View style={[s.chips, { marginTop: 10 }]}>
-          {FEATURES.map((x) => {
-            const on = !!feats[x.key];
-            return (
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 60 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={s.field}>
+          <Text style={s.label}>{T.dealLabel}</Text>
+          <View style={s.segment}>
+            {DEALS.map((d) => (
               <Pressable
-                key={x.key}
-                style={[s.feature, on && s.chipOn]}
-                onPress={() => toggleFeat(x.key)}
+                key={d.key}
+                style={[s.segBtn, deal === d.key && s.segOn]}
+                onPress={() => setDeal(d.key)}
               >
-                <Ionicons name={on ? 'checkmark-circle' : x.icon} size={17}
-                  color={on ? '#fff' : C.primary} />
-                <Text style={on ? s.chipTextOn : s.chipText}>{x.label}</Text>
+                <Text style={deal === d.key ? s.segTextOn : s.segText}>{d.label}</Text>
               </Pressable>
-            );
-          })}
+            ))}
+          </View>
         </View>
-      </View>
 
-      <View style={s.switchRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.label}>{T.notifyLabel}</Text>
-          <Text style={s.hint}>{T.notifyHint}</Text>
+        <View style={[s.field, { zIndex: 20 }]}>
+          <Text style={s.label}>{T.cityLabel}</Text>
+          <View style={{ flexDirection: 'row-reverse' }}>
+            <MultiCityInput
+              cities={cities}
+              setCities={setCities}
+              placeholder={T.cityPlaceholder}
+            />
+          </View>
+          <Text style={s.hint}>{T.cityHint}</Text>
         </View>
-        <Switch value={notify} onValueChange={setNotify}
-          trackColor={{ true: C.primary, false: '#D5DAE3' }} />
-      </View>
 
-      <Pressable style={[s.btn, busy && { opacity: 0.5 }]} onPress={save} disabled={busy}>
-        <Text style={s.btnText}>{busy ? T.busy : T.save}</Text>
-      </Pressable>
+        <View style={s.field}>
+          <Text style={s.label}>{T.typeLabel}</Text>
+          <View style={s.chips}>
+            {TYPES.map((t) => (
+              <Pressable
+                key={t.label}
+                style={[s.chip, ptype === t.key && s.chipOn]}
+                onPress={() => setPtype(t.key)}
+              >
+                <Text style={ptype === t.key ? s.chipTextOn : s.chipText}>{t.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
 
-      <Pressable style={s.clearBtn} onPress={clearAll}>
-        <Text style={s.clearText}>{T.clear}</Text>
-      </Pressable>
-    </ScrollView>
+        <View style={s.field}>
+          <Text style={s.label}>{T.priceLabel}</Text>
+          <View style={s.pair}>
+            <TextInput style={s.input} placeholder={T.from} placeholderTextColor="#A9B0BF"
+              keyboardType="numeric" value={minPrice} onChangeText={setMinPrice} />
+            <TextInput style={s.input} placeholder={T.to} placeholderTextColor="#A9B0BF"
+              keyboardType="numeric" value={maxPrice} onChangeText={setMaxPrice} />
+          </View>
+        </View>
+
+        <View style={s.field}>
+          <Text style={s.label}>{T.roomsLabel}</Text>
+          <View style={s.pair}>
+            <TextInput style={s.input} placeholder={T.minShort} placeholderTextColor="#A9B0BF"
+              keyboardType="numeric" value={minRooms} onChangeText={setMinRooms} />
+            <TextInput style={s.input} placeholder={T.maxShort} placeholderTextColor="#A9B0BF"
+              keyboardType="numeric" value={maxRooms} onChangeText={setMaxRooms} />
+          </View>
+        </View>
+
+        <View style={s.field}>
+          <Text style={s.label}>{T.bathsLabel}</Text>
+          <View style={s.pair}>
+            <TextInput style={s.input} placeholder={T.minShort} placeholderTextColor="#A9B0BF"
+              keyboardType="numeric" value={minBaths} onChangeText={setMinBaths} />
+            <TextInput style={s.input} placeholder={T.maxShort} placeholderTextColor="#A9B0BF"
+              keyboardType="numeric" value={maxBaths} onChangeText={setMaxBaths} />
+          </View>
+        </View>
+
+        <View style={s.field}>
+          <Text style={s.label}>{T.featuresLabel}</Text>
+          <Text style={s.hint}>{T.featuresHint}</Text>
+          <View style={[s.chips, { marginTop: 10 }]}>
+            {FEATURES.map((x) => {
+              const on = !!feats[x.key];
+              return (
+                <Pressable
+                  key={x.key}
+                  style={[s.feature, on && s.chipOn]}
+                  onPress={() => toggleFeat(x.key)}
+                >
+                  <Ionicons name={on ? 'checkmark-circle' : x.icon} size={17}
+                    color={on ? '#fff' : C.primary} />
+                  <Text style={on ? s.chipTextOn : s.chipText}>{x.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={s.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.label}>{T.notifyLabel}</Text>
+            <Text style={s.hint}>{T.notifyHint}</Text>
+          </View>
+          <Switch value={notify} onValueChange={setNotify}
+            trackColor={{ true: C.primary, false: '#D5DAE3' }} />
+        </View>
+
+        <Pressable style={[s.btn, busy && { opacity: 0.5 }]} onPress={save} disabled={busy}>
+          <Text style={s.btnText}>{busy ? T.busy : T.save}</Text>
+        </Pressable>
+
+        <Pressable style={s.clearBtn} onPress={clearAll}>
+          <Text style={s.clearText}>{T.clear}</Text>
+        </Pressable>
+      </ScrollView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: C.page },
-  link: { color: C.primary, fontWeight: '600', fontSize: 15 },
-  h1: { fontSize: 26, fontWeight: '700', color: C.text, textAlign: 'right', marginTop: 12 },
-  intro: { fontSize: 13, color: C.textMuted, textAlign: 'right', marginTop: 6, marginBottom: 22, lineHeight: 20 },
   field: { marginBottom: 18 },
   label: { fontSize: 14, fontWeight: '600', marginBottom: 6, textAlign: 'right', color: C.text },
   hint: { fontSize: 12, color: C.textMuted, marginTop: 6, textAlign: 'right' },

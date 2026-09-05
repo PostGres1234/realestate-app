@@ -8,11 +8,11 @@ import { useAuth } from '../../lib/auth';
 import { logSupabase } from '../../lib/logger';
 import { geocodeAddress } from '../../lib/geocode';
 import { C } from '../../lib/theme';
+import BackBar from '../../components/BackBar';
 import LocationInput from '../../components/LocationInput';
 
 const T = {
   heading: 'הוספת נכס',
-  back: 'חזרה לנכסים',
   listingTypeLabel: 'סוג העסקה',
   forSale: 'למכירה',
   forRent: 'להשכרה',
@@ -250,197 +250,193 @@ export default function NewListing() {
   }
 
   return (
-    <ScrollView
-      style={s.wrap}
-      contentContainerStyle={{ padding: 20, paddingTop: 56, paddingBottom: 80 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Pressable onPress={() => router.replace('/')} style={{ alignItems: 'flex-end' }}>
-        <Text style={s.link}>{T.back}</Text>
-      </Pressable>
+    <View style={s.wrap}>
+      <BackBar title={T.heading} />
 
-      <Text style={s.h1}>{T.heading}</Text>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.listingTypeLabel}</Text>
-        <View style={s.segment}>
-          <Pressable
-            style={[s.segBtn, listingType === 'sale' && s.segOn]}
-            onPress={() => setListingType('sale')}
-          >
-            <Text style={listingType === 'sale' ? s.segTextOn : s.segText}>{T.forSale}</Text>
-          </Pressable>
-          <Pressable
-            style={[s.segBtn, listingType === 'rent' && s.segOn]}
-            onPress={() => setListingType('rent')}
-          >
-            <Text style={listingType === 'rent' ? s.segTextOn : s.segText}>{T.forRent}</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.titleLabel}</Text>
-        <TextInput style={s.input} placeholder={T.titlePlaceholder}
-          placeholderTextColor="#A9B0BF" value={title} onChangeText={setTitle} />
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.priceLabel}</Text>
-        <TextInput
-          style={s.input}
-          placeholder={listingType === 'rent' ? T.priceRentPlaceholder : T.pricePlaceholder}
-          placeholderTextColor="#A9B0BF"
-          keyboardType="numeric"
-          value={price}
-          onChangeText={setPrice}
-        />
-        {listingType === 'rent' ? <Text style={s.hint}>{T.priceRentHint}</Text> : null}
-      </View>
-
-      <View style={[s.field, { zIndex: 30 }]}>
-        <Text style={s.label}>{T.cityLabel}</Text>
-        <LocationInput value={city} onChangeText={setCity}
-          placeholder={T.cityPlaceholder} kind="city" />
-      </View>
-
-      <View style={[s.field, { zIndex: 20 }]}>
-        <Text style={s.label}>{T.hoodLabel}</Text>
-        <LocationInput value={hood} onChangeText={setHood}
-          placeholder={T.hoodPlaceholder} kind="neighborhood"
-          parentCity={city.trim() || undefined} />
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.addressLabel}</Text>
-        <TextInput style={s.input} placeholder={T.addressPlaceholder}
-          placeholderTextColor="#A9B0BF" value={address} onChangeText={setAddress} />
-        <View style={s.hintRow}>
-          <Ionicons name="location-outline" size={13} color={C.textMuted} />
-          <Text style={s.hint}>{T.addressHint}</Text>
-        </View>
-      </View>
-
-      <View style={s.row}>
-        <View style={s.rowField}>
-          <Text style={s.label}>{T.roomsLabel}</Text>
-          <TextInput style={s.input} keyboardType="numeric"
-            value={bedrooms} onChangeText={setBedrooms} />
-        </View>
-        <View style={s.rowField}>
-          <Text style={s.label}>{T.bathsLabel}</Text>
-          <TextInput style={s.input} keyboardType="numeric"
-            value={bathrooms} onChangeText={setBathrooms} />
-        </View>
-        <View style={s.rowField}>
-          <Text style={s.label}>{T.areaLabel}</Text>
-          <TextInput style={s.input} keyboardType="numeric"
-            value={area} onChangeText={setArea} />
-        </View>
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.typeLabel}</Text>
-        <View style={s.chips}>
-          {TYPES.map((t) => (
-            <Pressable key={t.key} style={[s.chip, type === t.key && s.chipOn]}
-              onPress={() => setType(t.key)}>
-              <Text style={type === t.key ? s.chipTextOn : s.chipText}>{t.label}</Text>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 80 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={s.field}>
+          <Text style={s.label}>{T.listingTypeLabel}</Text>
+          <View style={s.segment}>
+            <Pressable
+              style={[s.segBtn, listingType === 'sale' && s.segOn]}
+              onPress={() => setListingType('sale')}
+            >
+              <Text style={listingType === 'sale' ? s.segTextOn : s.segText}>{T.forSale}</Text>
             </Pressable>
-          ))}
+            <Pressable
+              style={[s.segBtn, listingType === 'rent' && s.segOn]}
+              onPress={() => setListingType('rent')}
+            >
+              <Text style={listingType === 'rent' ? s.segTextOn : s.segText}>{T.forRent}</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
 
-      <View style={s.field}>
-        <Text style={s.label}>{T.featuresLabel}</Text>
-        <Text style={s.hint}>{T.featuresHint}</Text>
-        <View style={[s.chips, { marginTop: 10 }]}>
-          {FEATURES.map((x) => {
-            const on = !!feats[x.key];
-            return (
-              <Pressable key={x.key} style={[s.feature, on && s.chipOn]}
-                onPress={() => toggleFeat(x.key)}>
-                <Ionicons name={on ? 'checkmark-circle' : x.icon} size={17}
-                  color={on ? '#fff' : C.primary} />
-                <Text style={on ? s.chipTextOn : s.chipText}>{x.label}</Text>
+        <View style={s.field}>
+          <Text style={s.label}>{T.titleLabel}</Text>
+          <TextInput style={s.input} placeholder={T.titlePlaceholder}
+            placeholderTextColor="#A9B0BF" value={title} onChangeText={setTitle} />
+        </View>
+
+        <View style={s.field}>
+          <Text style={s.label}>{T.priceLabel}</Text>
+          <TextInput
+            style={s.input}
+            placeholder={listingType === 'rent' ? T.priceRentPlaceholder : T.pricePlaceholder}
+            placeholderTextColor="#A9B0BF"
+            keyboardType="numeric"
+            value={price}
+            onChangeText={setPrice}
+          />
+          {listingType === 'rent' ? <Text style={s.hint}>{T.priceRentHint}</Text> : null}
+        </View>
+
+        <View style={[s.field, { zIndex: 30 }]}>
+          <Text style={s.label}>{T.cityLabel}</Text>
+          <LocationInput value={city} onChangeText={setCity}
+            placeholder={T.cityPlaceholder} kind="city" />
+        </View>
+
+        <View style={[s.field, { zIndex: 20 }]}>
+          <Text style={s.label}>{T.hoodLabel}</Text>
+          <LocationInput value={hood} onChangeText={setHood}
+            placeholder={T.hoodPlaceholder} kind="neighborhood"
+            parentCity={city.trim() || undefined} />
+        </View>
+
+        <View style={s.field}>
+          <Text style={s.label}>{T.addressLabel}</Text>
+          <TextInput style={s.input} placeholder={T.addressPlaceholder}
+            placeholderTextColor="#A9B0BF" value={address} onChangeText={setAddress} />
+          <View style={s.hintRow}>
+            <Ionicons name="location-outline" size={13} color={C.textMuted} />
+            <Text style={s.hint}>{T.addressHint}</Text>
+          </View>
+        </View>
+
+        <View style={s.row}>
+          <View style={s.rowField}>
+            <Text style={s.label}>{T.roomsLabel}</Text>
+            <TextInput style={s.input} keyboardType="numeric"
+              value={bedrooms} onChangeText={setBedrooms} />
+          </View>
+          <View style={s.rowField}>
+            <Text style={s.label}>{T.bathsLabel}</Text>
+            <TextInput style={s.input} keyboardType="numeric"
+              value={bathrooms} onChangeText={setBathrooms} />
+          </View>
+          <View style={s.rowField}>
+            <Text style={s.label}>{T.areaLabel}</Text>
+            <TextInput style={s.input} keyboardType="numeric"
+              value={area} onChangeText={setArea} />
+          </View>
+        </View>
+
+        <View style={s.field}>
+          <Text style={s.label}>{T.typeLabel}</Text>
+          <View style={s.chips}>
+            {TYPES.map((t) => (
+              <Pressable key={t.key} style={[s.chip, type === t.key && s.chipOn]}
+                onPress={() => setType(t.key)}>
+                <Text style={type === t.key ? s.chipTextOn : s.chipText}>{t.label}</Text>
               </Pressable>
-            );
-          })}
+            ))}
+          </View>
         </View>
-      </View>
 
-      <View style={s.field}>
-        <Text style={s.label}>{T.descLabel}</Text>
-        <TextInput
-          style={s.textarea}
-          placeholder={T.descPlaceholder}
-          placeholderTextColor="#A9B0BF"
-          multiline
-          numberOfLines={5}
-          value={description}
-          onChangeText={setDescription}
-        />
-      </View>
-
-      <View style={s.field}>
-        <Text style={s.label}>{T.photosLabel}</Text>
-        <Pressable style={s.photoBtn} onPress={pickImages}>
-          <Text style={s.photoBtnText}>{T.addPhotos}</Text>
-        </Pressable>
-        <Text style={s.hint}>{T.photoHint}</Text>
-
-        {photos.length ? (
-          <ScrollView horizontal style={{ marginTop: 12 }} showsHorizontalScrollIndicator={false}>
-            <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
-              {photos.map((p) => (
-                <View key={p.uri} style={s.thumbWrap}>
-                  <Image source={{ uri: p.uri }} style={s.thumb} />
-                  <Pressable style={s.thumbX} onPress={() => removePhoto(p.uri)}>
-                    <Text style={s.thumbXText}>×</Text>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          </ScrollView>
-        ) : null}
-      </View>
-
-      <View style={s.field}>
-        <Pressable style={s.photoBtn} onPress={pickVideo}>
-          <Text style={s.photoBtnText}>{T.addVideo}</Text>
-        </Pressable>
-        <Text style={s.hint}>{T.videoHint}</Text>
-
-        {video ? (
-          <View style={[s.thumbWrap, { marginTop: 12, alignSelf: 'flex-end' }]}>
-            <View style={[s.thumb, s.videoThumb]}>
-              <Text style={s.videoThumbText}>{T.videoTag}</Text>
-            </View>
-            <Pressable style={s.thumbX} onPress={() => setVideo(null)}>
-              <Text style={s.thumbXText}>×</Text>
-            </Pressable>
+        <View style={s.field}>
+          <Text style={s.label}>{T.featuresLabel}</Text>
+          <Text style={s.hint}>{T.featuresHint}</Text>
+          <View style={[s.chips, { marginTop: 10 }]}>
+            {FEATURES.map((x) => {
+              const on = !!feats[x.key];
+              return (
+                <Pressable key={x.key} style={[s.feature, on && s.chipOn]}
+                  onPress={() => toggleFeat(x.key)}>
+                  <Ionicons name={on ? 'checkmark-circle' : x.icon} size={17}
+                    color={on ? '#fff' : C.primary} />
+                  <Text style={on ? s.chipTextOn : s.chipText}>{x.label}</Text>
+                </Pressable>
+              );
+            })}
           </View>
-        ) : null}
-      </View>
+        </View>
 
-      <Pressable style={[s.btn, busy && { opacity: 0.5 }]} onPress={submit} disabled={busy}>
-        {busy ? (
-          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
-            <ActivityIndicator color="#fff" />
-            <Text style={s.btnText}>{stage}</Text>
-          </View>
-        ) : (
-          <Text style={s.btnText}>{T.submit}</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+        <View style={s.field}>
+          <Text style={s.label}>{T.descLabel}</Text>
+          <TextInput
+            style={s.textarea}
+            placeholder={T.descPlaceholder}
+            placeholderTextColor="#A9B0BF"
+            multiline
+            numberOfLines={5}
+            value={description}
+            onChangeText={setDescription}
+          />
+        </View>
+
+        <View style={s.field}>
+          <Text style={s.label}>{T.photosLabel}</Text>
+          <Pressable style={s.photoBtn} onPress={pickImages}>
+            <Text style={s.photoBtnText}>{T.addPhotos}</Text>
+          </Pressable>
+          <Text style={s.hint}>{T.photoHint}</Text>
+
+          {photos.length ? (
+            <ScrollView horizontal style={{ marginTop: 12 }} showsHorizontalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
+                {photos.map((p) => (
+                  <View key={p.uri} style={s.thumbWrap}>
+                    <Image source={{ uri: p.uri }} style={s.thumb} />
+                    <Pressable style={s.thumbX} onPress={() => removePhoto(p.uri)}>
+                      <Text style={s.thumbXText}>×</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          ) : null}
+        </View>
+
+        <View style={s.field}>
+          <Pressable style={s.photoBtn} onPress={pickVideo}>
+            <Text style={s.photoBtnText}>{T.addVideo}</Text>
+          </Pressable>
+          <Text style={s.hint}>{T.videoHint}</Text>
+
+          {video ? (
+            <View style={[s.thumbWrap, { marginTop: 12, alignSelf: 'flex-end' }]}>
+              <View style={[s.thumb, s.videoThumb]}>
+                <Text style={s.videoThumbText}>{T.videoTag}</Text>
+              </View>
+              <Pressable style={s.thumbX} onPress={() => setVideo(null)}>
+                <Text style={s.thumbXText}>×</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+
+        <Pressable style={[s.btn, busy && { opacity: 0.5 }]} onPress={submit} disabled={busy}>
+          {busy ? (
+            <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator color="#fff" />
+              <Text style={s.btnText}>{stage}</Text>
+            </View>
+          ) : (
+            <Text style={s.btnText}>{T.submit}</Text>
+          )}
+        </Pressable>
+      </ScrollView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: C.page },
-  link: { color: C.primary, fontWeight: '600', fontSize: 15 },
-  h1: { fontSize: 26, fontWeight: '700', color: C.text, textAlign: 'right', marginTop: 12, marginBottom: 20 },
   field: { marginBottom: 18 },
   row: { flexDirection: 'row-reverse', gap: 10, marginBottom: 18 },
   rowField: { flex: 1 },

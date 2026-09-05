@@ -1,3 +1,4 @@
+import BackBar from '../components/BackBar';
 import { useState, useCallback, useRef } from 'react';
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
@@ -120,15 +121,10 @@ export default function MapScreen() {
   return (
     <View style={s.wrap}>
       <View style={s.header}>
-        <View style={s.headerTop}>
-          <View style={s.titleRow}>
-            <Pressable onPress={() => router.back()} hitSlop={10}>
-              <Ionicons name="chevron-forward" size={24} color={C.text} />
-            </Pressable>
-            <Text style={s.h1}>{T.heading}</Text>
-          </View>
-          <Text style={s.count}>{points.length + ' ' + T.results}</Text>
-        </View>
+     <BackBar
+          title={T.heading}
+          right={<Text style={s.count}>{points.length + ' ' + T.results}</Text>}
+        />
 
         <View style={s.segment}>
           {[
@@ -178,7 +174,7 @@ export default function MapScreen() {
 
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: C.page },
-  header: { backgroundColor: C.page, paddingTop: 56, paddingBottom: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: C.border },
+  header: { backgroundColor: C.page, paddingBottom: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: C.border },
   headerTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   titleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
   h1: { fontSize: 22, fontWeight: '700', color: C.text },

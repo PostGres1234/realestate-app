@@ -4,16 +4,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
-import { getSeenMap, markInboxOpened } from '../lib/inbox';
+import { getSeenMap, markSeen } from '../lib/inbox';
+import { logSupabase } from '../lib/logger';
 import { C } from '../lib/theme';
-import TabBar from '../components/TabBar';
+import BackBar from '../components/BackBar';
 
 const T = {
   heading: 'התראות',
-  back: 'חזרה',
   empty: 'אין התראות חדשות',
-  emptyHint: 'כאן יופיעו הודעות חדשות ונכסים שמתאימים להעדפות שלכם.',
-  guest: 'התחברו כדי לראות התראות.',
+  emptyHint: 'הודעות חדשות ונכסים שמתאימים להעדפות שלכם יופיעו כאן',
+  guest: 'התחברו כדי לראות התראות',
   login: 'התחברות',
   msgTitle: 'הודעה חדשה',
   msgTitleMany: 'הודעות חדשות',
@@ -76,7 +76,6 @@ export default function Notifications() {
         out.push({
           key: 'msg-' + cid,
           kind: 'message',
-          count: list.length,
           title: list.length === 1 ? T.msgTitle : list.length + ' ' + T.msgTitleMany,
           subtitle: prop?.title ?? prop?.city ?? '',
           preview: list[0].body.split('\n')[0],
@@ -87,7 +86,7 @@ export default function Notifications() {
     }
 
     const { data: matches, error } = await supabase.rpc('my_new_matches');
-    if (error) console.log('matches error', error.message);
+    if (error) logSupabase('notifications.matches', error);
 
     (matches ?? []).forEach((p) => {
       out.push({
@@ -95,7 +94,7 @@ export default function Notifications() {
         kind: 'match',
         title: T.matchTitle,
         subtitle: p.title ?? p.city,
-        preview: p.city + (p.neighborhood ? ', ' + p.neighborhood : ''),
+        preview: p.neighborhood ? p.city + ', ' + p.neighborhood : p.city,
         price: p.price,
         at: p.created_at,
         path: '/property/' + p.id,
@@ -111,10 +110,9 @@ export default function Notifications() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function markAll() {
-    await markInboxOpened();
     const { data: convos } = await supabase.from('conversations').select('id');
     for (const c of convos ?? []) {
-      await import('../lib/inbox').then((m) => m.markSeen(c.id));
+      await markSeen(c.id);
     }
     await supabase
       .from('preferences')
@@ -137,26 +135,30 @@ export default function Notifications() {
   if (!user) {
     return (
       <View style={s.wrap}>
+        <BackBar title={T.heading} />
         <View style={s.center}>
           <Ionicons name="notifications-off-outline" size={54} color={C.textMuted} />
-          <Text style={s.muted}>{T.guest}</Text>
-          <Pressable style={s.btn} onPress={() => router.push('/(auth)/login')}>
+          <Text style={s.emptyTitle}>{T.guest}</Text>
+          <Pressable style={s.btn} onPress={() => router.push('/subscribe')}>
             <Text style={s.btnText}>{T.login}</Text>
           </Pressable>
         </View>
-        <TabBar active="home" />
       </View>
     );
   }
 
   return (
     <View style={s.wrap}>
-      <View style={s.header}>
-        <Text style={s.h1}>{T.heading}</Text>
-        <Pressable onPress={() => router.replace('/')}>
-          <Text style={s.link}>{T.back}</Text>
-        </Pressable>
-      </View>
+      <BackBar
+        title={T.heading}
+        right={
+          items.length ? (
+            <View style={s.countPill}>
+              <Text style={s.countText}>{items.length}</Text>
+            </View>
+          ) : null
+        }
+      />
 
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} size="large" color={C.primary} />
@@ -164,22 +166,23 @@ export default function Notifications() {
         <FlatList
           data={items}
           keyExtractor={(x) => x.key}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 10 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24, gap: 10 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} tintColor={C.primary}
               onRefresh={() => { setRefreshing(true); load(); }} />
           }
           ListEmptyComponent={
-            <View style={{ alignItems: 'center', marginTop: 60, gap: 14 }}>
+            <View style={s.emptyBox}>
               <Ionicons name="checkmark-done-outline" size={50} color={C.textMuted} />
-              <Text style={s.muted}>{T.empty}</Text>
-              <Text style={s.mutedSmall}>{T.emptyHint}</Text>
+              <Text style={s.emptyTitle}>{T.empty}</Text>
+              <Text style={s.emptyHint}>{T.emptyHint}</Text>
             </View>
           }
           ListFooterComponent={
             items.length ? (
               <Pressable style={s.markBtn} onPress={markAll}>
+                <Ionicons name="checkmark-done" size={17} color={C.primary} />
                 <Text style={s.markText}>{T.markAll}</Text>
               </Pressable>
             ) : null
@@ -188,8 +191,8 @@ export default function Notifications() {
             <Pressable style={s.row} onPress={() => router.push(item.path)}>
               <View style={[s.icon, item.kind === 'match' && s.iconMatch]}>
                 <Ionicons
-                  name={item.kind === 'message' ? 'chatbubble-outline' : 'home-outline'}
-                  size={19}
+                  name={item.kind === 'message' ? 'chatbubble' : 'home'}
+                  size={17}
                   color={item.kind === 'message' ? C.primary : '#0F6E56'}
                 />
               </View>
@@ -213,32 +216,30 @@ export default function Notifications() {
           )}
         />
       )}
-
-      <TabBar active="home" />
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: C.page, paddingTop: 56 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 },
-  header: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
-  h1: { fontSize: 26, fontWeight: '700', color: C.text, textAlign: 'right' },
-  link: { color: C.primary, fontWeight: '600', fontSize: 15 },
-  row: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 12, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14 },
-  icon: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.primaryTint, alignItems: 'center', justifyContent: 'center' },
+  wrap: { flex: 1, backgroundColor: '#F4F6FA' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 },
+  countPill: { backgroundColor: C.danger, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  countText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  row: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 12, backgroundColor: C.page, borderRadius: 16, padding: 14, shadowColor: '#1A1D26', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  icon: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.primaryTint, alignItems: 'center', justifyContent: 'center' },
   iconMatch: { backgroundColor: '#E1F5EE' },
   titleRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
   title: { fontSize: 14, fontWeight: '700', color: C.text, textAlign: 'right', flex: 1 },
   time: { fontSize: 11, color: C.textMuted },
   subtitle: { fontSize: 13, color: C.textSecondary, textAlign: 'right', marginTop: 2 },
   preview: { fontSize: 12, color: C.textMuted, textAlign: 'right', marginTop: 3 },
-  price: { fontSize: 14, fontWeight: '700', color: C.primary, textAlign: 'right', marginTop: 5 },
+  price: { fontSize: 14, fontWeight: '800', color: C.primary, textAlign: 'right', marginTop: 5 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.primary, marginTop: 6 },
-  markBtn: { paddingVertical: 18, alignItems: 'center' },
+  markBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 18 },
   markText: { color: C.primary, fontWeight: '600', fontSize: 14 },
-  muted: { color: C.textSecondary, textAlign: 'center', fontSize: 16, fontWeight: '600' },
-  mutedSmall: { color: C.textMuted, textAlign: 'center', fontSize: 13, lineHeight: 20, paddingHorizontal: 30 },
+  emptyBox: { alignItems: 'center', marginTop: 70, gap: 10 },
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: C.textSecondary, textAlign: 'center' },
+  emptyHint: { fontSize: 13, color: C.textMuted, textAlign: 'center', lineHeight: 20, paddingHorizontal: 30 },
   btn: { backgroundColor: C.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
 });

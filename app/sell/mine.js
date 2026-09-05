@@ -1,3 +1,4 @@
+import BackBar from '../../components/BackBar';
 import { useState, useCallback } from 'react';
 import { View, Text, FlatList, Pressable, ActivityIndicator, Alert, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -90,12 +91,7 @@ export default function MyListings() {
 
   return (
     <View style={s.wrap}>
-      <View style={s.header}>
-        <Text style={s.h1}>{T.heading}</Text>
-        <Pressable onPress={() => router.back()}>
-          <Text style={s.link}>{T.back}</Text>
-        </Pressable>
-      </View>
+      <BackBar title={T.heading} />
 
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} size="large" color={C.primary} />
@@ -163,7 +159,7 @@ export default function MyListings() {
 }
 
 const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: C.page, paddingTop: 56 },
+  wrap: { flex: 1, backgroundColor: C.page},
   header: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 18 },
   h1: { fontSize: 26, fontWeight: '700', color: C.text, textAlign: 'right' },
   link: { color: C.primary, fontWeight: '600', fontSize: 15 },

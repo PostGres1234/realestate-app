@@ -6,7 +6,7 @@ import { C } from '../lib/theme';
 
 const T = {
   home: 'בית',
-  assistant: 'יועץ',
+  assistant: 'ג׳ימי',
   add: 'הוספה',
   messages: 'הודעות',
   profile: 'פרופיל',
