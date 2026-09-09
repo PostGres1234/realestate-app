@@ -20,7 +20,7 @@ const T = {
   prefsHint: 'עדכונים על נכסים שמתאימים לכם',
   recent: 'נצפו לאחרונה',
   recentHint: 'נכסים שפתחתם',
-assistant: 'ג׳ימי',
+  assistant: 'ג׳ימי',
   assistantHint: 'היועץ שיעזור לכם למצוא אזור מתאים',
   logout: 'התנתקות',
   guest: 'התחברו כדי לנהל את החשבון שלכם',

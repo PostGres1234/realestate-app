@@ -18,9 +18,9 @@ const T = {
   forRent: 'להשכרה',
   photosLabel: 'תמונות',
   addPhotos: 'בחירת תמונות',
-  photoHint: 'עד 6 תמונות. הראשונה תוצג ברשימה.',
+  photoHint: 'עד 6 תמונות, כל אחת עד 8MB. הראשונה תוצג ברשימה.',
   addVideo: 'הוספת סרטון',
-  videoHint: 'סרטון אחד, עד 60 שניות',
+  videoHint: 'סרטון אחד, עד 45 שניות ועד 20MB',
   videoTag: 'סרטון',
   titleLabel: 'כותרת',
   titlePlaceholder: 'לדוגמה: דירת 4 חדרים בכרמל',
@@ -59,7 +59,12 @@ const T = {
   oneVideoTitle: 'סרטון אחד בלבד',
   oneVideoBody: 'ניתן להוסיף סרטון אחד לכל נכס.',
   tooLongTitle: 'הסרטון ארוך מדי',
-  tooLongBody: 'ניתן להעלות סרטון של עד 60 שניות.',
+  tooLongBody: 'ניתן להעלות סרטון של עד 45 שניות.',
+  tooBigTitle: 'הקובץ גדול מדי',
+  tooBigPhoto: 'כל תמונה חייבת להיות עד 8MB.',
+  tooBigVideo: 'הסרטון חייב להיות עד 20MB. נסו סרטון קצר יותר או באיכות נמוכה יותר.',
+  quotaTitle: 'הגעתם למגבלת האחסון',
+  quotaBody: 'מחקו נכסים ישנים כדי לפנות מקום.',
 };
 
 const TYPES = [
@@ -77,6 +82,9 @@ const FEATURES = [
 ];
 
 const MAX_PHOTOS = 6;
+const MAX_PHOTO_MB = 8;
+const MAX_VIDEO_MB = 20;
+const MAX_USER_MB = 200;
 
 export default function NewListing() {
   const { user } = useAuth();
@@ -97,6 +105,16 @@ export default function NewListing() {
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState('');
 
+  async function fileSizeMB(uri) {
+    try {
+      const res = await fetch(uri);
+      const blob = await res.blob();
+      return blob.size / 1024 / 1024;
+    } catch {
+      return 0;
+    }
+  }
+
   async function pickImages() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return Alert.alert(T.permTitle, T.permBody);
@@ -104,12 +122,22 @@ export default function NewListing() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
-      quality: 0.7,
+      quality: 0.6,
       selectionLimit: MAX_PHOTOS - photos.length,
     });
     if (res.canceled) return;
 
-    const next = [...photos, ...res.assets];
+    const accepted = [];
+    for (const asset of res.assets) {
+      const mb = await fileSizeMB(asset.uri);
+      if (mb > MAX_PHOTO_MB) {
+        Alert.alert(T.tooBigTitle, T.tooBigPhoto);
+        continue;
+      }
+      accepted.push(asset);
+    }
+
+    const next = [...photos, ...accepted];
     if (next.length > MAX_PHOTOS) {
       Alert.alert(T.maxTitle, T.maxBody);
       return setPhotos(next.slice(0, MAX_PHOTOS));
@@ -129,15 +157,22 @@ export default function NewListing() {
 
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      quality: 0.7,
-      videoMaxDuration: 60,
+      quality: 0.5,
+      videoMaxDuration: 45,
     });
     if (res.canceled) return;
 
     const asset = res.assets[0];
-    if (asset.duration && asset.duration > 62000) {
+
+    if (asset.duration && asset.duration > 47000) {
       return Alert.alert(T.tooLongTitle, T.tooLongBody);
     }
+
+    const mb = await fileSizeMB(asset.uri);
+    if (mb > MAX_VIDEO_MB) {
+      return Alert.alert(T.tooBigTitle, T.tooBigVideo);
+    }
+
     setVideo(asset);
   }
 
@@ -190,6 +225,12 @@ export default function NewListing() {
     if (!title.trim() || !price || !city.trim()) {
       return Alert.alert(T.missingTitle, T.missingBody);
     }
+
+    const { data: usedMb } = await supabase.rpc('my_storage_mb');
+    if ((usedMb ?? 0) > MAX_USER_MB) {
+      return Alert.alert(T.quotaTitle, T.quotaBody);
+    }
+
     setBusy(true);
     setStage(T.locating);
 

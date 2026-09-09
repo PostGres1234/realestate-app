@@ -1,4 +1,3 @@
-import TabBar from '../components/TabBar';
 import { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, FlatList, Image, KeyboardAvoidingView, Platform, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,16 +6,15 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
 import { C } from '../lib/theme';
-
+import BackBar from '../components/BackBar';
+import TabBar from '../components/TabBar';
 
 const T = {
   heading: 'ג׳ימי',
   sub: 'היועץ שיעזור לכם למצוא איפה לגור',
   placeholder: 'כתבו לג׳ימי...',
-  thinking: 'חושב...',
   guest: 'התחברו כדי לדבר עם ג׳ימי',
   login: 'התחברות',
-  restart: 'שיחה חדשה',
   perMonth: 'לחודש',
   rooms: 'חד׳',
   sqm: 'מ"ר',
@@ -118,6 +116,7 @@ export default function Assistant() {
   if (!user) {
     return (
       <View style={s.wrap}>
+        <BackBar title={T.heading} subtitle={T.sub} />
         <View style={s.center}>
           <Ionicons name="sparkles-outline" size={54} color={C.textMuted} />
           <Text style={s.muted}>{T.guest}</Text>
@@ -131,18 +130,19 @@ export default function Assistant() {
   }
 
   return (
-    <KeyboardAvoidingView style={s.wrap}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-
-      <View style={s.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.h1}>{T.heading}</Text>
-          <Text style={s.sub}>{T.sub}</Text>
-        </View>
-        <Pressable onPress={restart} hitSlop={8}>
-          <Ionicons name="refresh-outline" size={21} color={C.primary} />
-        </Pressable>
-      </View>
+    <KeyboardAvoidingView
+      style={s.wrap}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <BackBar
+        title={T.heading}
+        subtitle={T.sub}
+        right={
+          <Pressable onPress={restart} hitSlop={8}>
+            <Ionicons name="refresh-outline" size={21} color={C.primary} />
+          </Pressable>
+        }
+      />
 
       <FlatList
         ref={listRef}
@@ -153,9 +153,7 @@ export default function Assistant() {
         showsVerticalScrollIndicator={false}
         renderItem={({ item, index }) => {
           const mine = item.role === 'user';
-          const cards = (item.ids ?? [])
-            .map((id) => byId[id])
-            .filter(Boolean);
+          const cards = (item.ids ?? []).map((id) => byId[id]).filter(Boolean);
 
           return (
             <View>
@@ -178,8 +176,7 @@ export default function Assistant() {
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={{ gap: 10, paddingVertical: 10, paddingHorizontal: 4 }}
                   renderItem={({ item: p }) => (
-                    <Pressable style={s.card}
-                      onPress={() => router.push('/property/' + p.id)}>
+                    <Pressable style={s.card} onPress={() => router.push('/property/' + p.id)}>
                       {p.cover ? (
                         <Image source={{ uri: p.cover }} style={s.cardImg} />
                       ) : (
@@ -247,7 +244,7 @@ export default function Assistant() {
           onChangeText={setText}
           multiline
         />
-     </View>
+      </View>
 
       <TabBar active="assistant" />
     </KeyboardAvoidingView>
@@ -257,9 +254,6 @@ export default function Assistant() {
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: '#F4F6FA' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 },
-  header: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, backgroundColor: C.page, paddingTop: 56, paddingBottom: 14, paddingHorizontal: 20, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 },
-  h1: { fontSize: 22, fontWeight: '700', color: C.text, textAlign: 'right' },
-  sub: { fontSize: 12, color: C.textMuted, textAlign: 'right', marginTop: 2 },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 7 },
   rowMine: { justifyContent: 'flex-start' },
   rowBot: { justifyContent: 'flex-end' },
@@ -280,7 +274,7 @@ const s = StyleSheet.create({
   cardTitle: { fontSize: 13, fontWeight: '600', color: C.text, textAlign: 'right', marginTop: 3 },
   cardMeta: { fontSize: 11, color: C.textMuted, textAlign: 'right', marginTop: 2 },
   cardSpecs: { fontSize: 11, color: C.textSecondary, textAlign: 'right', marginTop: 4 },
-  composer: { flexDirection: 'row-reverse', gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 28, backgroundColor: C.page, borderTopWidth: 1, borderTopColor: C.border, alignItems: 'flex-end' },
+  composer: { flexDirection: 'row-reverse', gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, backgroundColor: C.page, borderTopWidth: 1, borderTopColor: C.border, alignItems: 'flex-end' },
   input: { flex: 1, backgroundColor: '#F1F4F9', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 11, fontSize: 15, textAlign: 'right', color: C.text, maxHeight: 110 },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
   sendOff: { backgroundColor: '#C3CBD9' },

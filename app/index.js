@@ -73,44 +73,23 @@ export default function Browse() {
   ).length;
 
   const load = useCallback(async () => {
-    const cols = user
-      ? 'id, title, price, city, neighborhood, bedrooms, bathrooms, area_sqm, property_type, listing_type, created_at'
-      : 'id, price, city, listing_type, created_at';
+    const { data, error } = await supabase.rpc('browse_properties', {
+      p_deal: mode,
+      p_cities: cities,
+      p_type: cat,
+      p_min_price: applied.minPrice ? Number(applied.minPrice) : null,
+      p_max_price: applied.maxPrice ? Number(applied.maxPrice) : null,
+      p_min_rooms: applied.minRooms ? Number(applied.minRooms) : null,
+      p_max_rooms: applied.maxRooms ? Number(applied.maxRooms) : null,
+      p_min_baths: applied.minBaths ? Number(applied.minBaths) : null,
+      p_max_baths: applied.maxBaths ? Number(applied.maxBaths) : null,
+      p_balcony: !!applied.has_balcony,
+      p_shelter: !!applied.has_shelter,
+      p_parking: !!applied.has_parking,
+      p_elevator: !!applied.has_elevator,
+      p_yard: !!applied.has_yard,
+    });
 
-    let query = supabase
-      .from('properties')
-      .select(cols)
-      .eq('status', 'active')
-      .eq('listing_type', mode);
-
-    if (user) query = query.neq('seller_id', user.id);
-
-    if (cities.length) {
-      query = user
-        ? query.or(
-            cities.map((c) => 'city.eq.' + c).join(',') + ',' +
-            cities.map((c) => 'neighborhood.eq.' + c).join(',')
-          )
-        : query.in('city', cities);
-    }
-
-    if (cat && user) query = query.eq('property_type', cat);
-    if (applied.minPrice) query = query.gte('price', Number(applied.minPrice));
-    if (applied.maxPrice) query = query.lte('price', Number(applied.maxPrice));
-
-    if (user) {
-      if (applied.minRooms) query = query.gte('bedrooms', Number(applied.minRooms));
-      if (applied.maxRooms) query = query.lte('bedrooms', Number(applied.maxRooms));
-      if (applied.minBaths) query = query.gte('bathrooms', Number(applied.minBaths));
-      if (applied.maxBaths) query = query.lte('bathrooms', Number(applied.maxBaths));
-      FEATURES.forEach((x) => {
-        if (applied[x.key]) query = query.eq(x.key, true);
-      });
-    }
-
-    query = query.order('created_at', { ascending: false }).limit(50);
-
-    const { data, error } = await query;
     if (error) logSupabase('browse.load', error, { mode, cityCount: cities.length });
 
     const list = data ?? [];
@@ -214,17 +193,17 @@ export default function Browse() {
             </Pressable>
 
             <View style={s.icons}>
-            <Pressable style={s.iconBtn} onPress={() => router.push('/saved')}>
-              <Ionicons name="heart-outline" size={19} color={C.primary} />
-            </Pressable>
-            <Pressable style={s.iconBtn} onPress={() => router.push('/map')}>
-              <Ionicons name="map-outline" size={19} color={C.primary} />
-            </Pressable>
-            <Pressable style={s.iconBtn} onPress={() => router.push('/notifications')}>
-              <Ionicons name="notifications-outline" size={19} color={C.primary} />
-              {unread > 0 ? <View style={s.bellDot} /> : null}
-            </Pressable>
-          </View>
+              <Pressable style={s.iconBtn} onPress={() => router.push('/saved')}>
+                <Ionicons name="heart-outline" size={19} color={C.primary} />
+              </Pressable>
+              <Pressable style={s.iconBtn} onPress={() => router.push('/map')}>
+                <Ionicons name="map-outline" size={19} color={C.primary} />
+              </Pressable>
+              <Pressable style={s.iconBtn} onPress={() => router.push('/notifications')}>
+                <Ionicons name="notifications-outline" size={19} color={C.primary} />
+                {unread > 0 ? <View style={s.bellDot} /> : null}
+              </Pressable>
+            </View>
           </View>
 
           <View style={s.segment}>
@@ -316,9 +295,7 @@ export default function Browse() {
                       {item.listing_type === 'rent' ? ' ' + T.perMonth : ''}
                     </Text>
                     <Text style={s.miniCity} numberOfLines={1}>
-                      {user && item.neighborhood
-                        ? item.city + ', ' + item.neighborhood
-                        : item.city}
+                      {item.neighborhood ? item.city + ', ' + item.neighborhood : item.city}
                     </Text>
                     {user ? (
                       <Text style={s.miniMeta} numberOfLines={1}>
@@ -360,10 +337,7 @@ export default function Browse() {
           }
           ListEmptyComponent={<Text style={s.muted}>{T.empty}</Text>}
           renderItem={({ item }) => (
-            <Pressable
-              style={s.card}
-              onPress={() => router.push('/property/' + item.id)}
-            >
+            <Pressable style={s.card} onPress={() => router.push('/property/' + item.id)}>
               <View style={s.imgWrap}>
                 {item.cover ? (
                   <Image source={{ uri: item.cover }} style={s.img} />
@@ -388,7 +362,7 @@ export default function Browse() {
                   />
                 </Pressable>
 
-                {user && item.property_type ? (
+                {item.property_type ? (
                   <View style={s.typeTag}>
                     <Text style={s.typeTagText}>{TYPES[item.property_type]}</Text>
                   </View>
@@ -396,20 +370,18 @@ export default function Browse() {
               </View>
 
               <View style={s.body}>
-                {user ? (
+                {item.title ? (
                   <Text style={s.title} numberOfLines={1}>{item.title}</Text>
                 ) : null}
 
                 <View style={s.cardLocRow}>
                   <Ionicons name="location-outline" size={14} color={C.textMuted} />
                   <Text style={s.loc} numberOfLines={1}>
-                    {user && item.neighborhood
-                      ? item.city + ', ' + item.neighborhood
-                      : item.city}
+                    {item.neighborhood ? item.city + ', ' + item.neighborhood : item.city}
                   </Text>
                 </View>
 
-                {user ? (
+                {item.bedrooms ? (
                   <View style={s.specs}>
                     <View style={s.spec}>
                       <Ionicons name="bed-outline" size={16} color={C.primary} />
@@ -456,15 +428,15 @@ export default function Browse() {
 
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: '#F4F6FA' },
-  topArea: { backgroundColor: C.page, paddingTop: 56, paddingBottom: 14, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 },
+  topArea: { backgroundColor: C.page, paddingTop: 50, paddingBottom: 14, borderBottomLeftRadius: 22, borderBottomRightRadius: 22 },
   topBar: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 14, gap: 12 },
   locBtn: { flex: 1 },
   locLabel: { fontSize: 11, color: C.textMuted, textAlign: 'right' },
   locRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, marginTop: 2 },
-  locValue: { fontSize: 15, color: C.text, fontWeight: '700', maxWidth: 180 },
-  icons: { flexDirection: 'row-reverse', gap: 8 },
-  iconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
-  bellDot: { position: 'absolute', top: 9, left: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: C.danger },
+  locValue: { fontSize: 15, color: C.text, fontWeight: '700', maxWidth: 160 },
+  icons: { flexDirection: 'row-reverse', gap: 7 },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
+  bellDot: { position: 'absolute', top: 8, left: 9, width: 8, height: 8, borderRadius: 4, backgroundColor: C.danger },
   segment: { flexDirection: 'row-reverse', backgroundColor: C.surface, borderRadius: 14, padding: 4, marginHorizontal: 16 },
   segBtn: { flex: 1, paddingVertical: 10, borderRadius: 11, alignItems: 'center' },
   segOn: { backgroundColor: C.primary },

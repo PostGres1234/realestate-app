@@ -1,12 +1,12 @@
-import BackBar from '../components/BackBar';
-import { useState, useCallback, useRef } from 'react';
-import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { useState, useCallback } from 'react';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { logSupabase } from '../lib/logger';
 import { C } from '../lib/theme';
+import BackBar from '../components/BackBar';
 
 const T = {
   heading: 'מפת נכסים',
@@ -14,10 +14,65 @@ const T = {
   rent: 'להשכרה',
   all: 'הכל',
   results: 'נכסים',
-  empty: 'אין נכסים באזור הזה',
+  loadingPlaces: 'טוען מקומות...',
+  noneFound: 'לא נמצאו מקומות באזור',
+  noName: 'ללא שם',
 };
 
-function buildHtml(points) {
+const LAYERS = [
+  {
+    key: 'school', label: 'חינוך', icon: 'school-outline',
+    color: '#F5A623', emoji: '\uD83C\uDFEB',
+    filter: 'nwr["amenity"~"^(school|kindergarten|college|university)$"]["name"]',
+  },
+  {
+    key: 'health', label: 'בריאות', icon: 'medkit-outline',
+    color: '#E5484D', emoji: '\uD83C\uDFE5',
+    filter: 'nwr["amenity"~"^(hospital|clinic|doctors|pharmacy)$"]["name"]',
+  },
+  {
+    key: 'gym', label: 'ספורט', icon: 'barbell-outline',
+    color: '#1D9E75', emoji: '\uD83D\uDCAA',
+    filter: 'nwr["leisure"~"^(fitness_centre|sports_centre|sports_hall|swimming_pool|pitch)$"]["name"]',
+  },
+  {
+    key: 'shop', label: 'קניות', icon: 'cart-outline',
+    color: '#8B5CF6', emoji: '\uD83D\uDED2',
+    filter: 'nwr["shop"~"^(mall|supermarket|department_store|convenience|bakery)$"]["name"]',
+  },
+  {
+    key: 'transit', label: 'תחבורה', icon: 'bus-outline',
+    color: '#0EA5E9', emoji: '\uD83D\uDE8C',
+    filter: 'nwr["public_transport"~"^(station|stop_position)$"]["name"]',
+  },
+  {
+    key: 'park', label: 'פארקים', icon: 'leaf-outline',
+    color: '#16A34A', emoji: '\uD83C\uDF33',
+    filter: 'nwr["leisure"~"^(park|playground|garden)$"]["name"]',
+  },
+  {
+    key: 'food', label: 'מסעדות', icon: 'restaurant-outline',
+    color: '#F97316', emoji: '\uD83C\uDF7D',
+    filter: 'nwr["amenity"~"^(restaurant|cafe|fast_food)$"]["name"]',
+  },
+  {
+    key: 'worship', label: 'בתי תפילה', icon: 'moon-outline',
+    color: '#0891B2', emoji: '\uD83D\uDD4C',
+    filter: 'nwr["amenity"="place_of_worship"]["name"]',
+  },
+  {
+    key: 'bank', label: 'בנקים', icon: 'card-outline',
+    color: '#4F46E5', emoji: '\uD83C\uDFE7',
+    filter: 'nwr["amenity"~"^(bank|atm|post_office)$"]["name"]',
+  },
+  {
+    key: 'center', label: 'מרכז העיר', icon: 'business-outline',
+    color: '#64748B', emoji: '\uD83C\uDFDB',
+    filter: 'node["place"~"^(city|town)$"]["name"]',
+  },
+];
+
+function buildHtml(points, places) {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -26,51 +81,71 @@ function buildHtml(points) {
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  html, body, #map { height: 100%; margin: 0; padding: 0; }
+  html, body, #map { height: 100%; margin: 0; padding: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+
   .home-pin {
-    background: #E5484D;
-    width: 30px; height: 30px;
-    border-radius: 50% 50% 50% 0;
-    transform: rotate(-45deg);
-    border: 2px solid #fff;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    background: linear-gradient(135deg, #1f6feb, #1652B8);
+    width: 36px; height: 36px;
+    border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+    border: 3px solid #fff; box-shadow: 0 4px 11px rgba(31,111,235,0.45);
     display: flex; align-items: center; justify-content: center;
   }
-  .home-pin span { transform: rotate(45deg); font-size: 15px; }
-  .leaflet-popup-content { direction: rtl; text-align: right; margin: 10px 12px; }
-  .p-price { font-size: 17px; font-weight: 800; color: #1f6feb; }
-  .p-city { font-size: 13px; color: #1A1D26; margin-top: 2px; }
-  .p-meta { font-size: 12px; color: #8A92A6; margin-top: 2px; }
-  .p-btn {
-    display: block; margin-top: 8px; background: #1f6feb; color: #fff;
-    text-align: center; padding: 7px; border-radius: 8px;
-    font-size: 13px; font-weight: 600; text-decoration: none;
+  .home-pin span { transform: rotate(45deg); font-size: 16px; }
+
+  .poi-wrap { display: flex; flex-direction: column; align-items: center; }
+  .poi-pin {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 2.5px solid #fff; box-shadow: 0 3px 7px rgba(0,0,0,0.28);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
   }
+  .poi-label {
+    margin-top: 3px; background: rgba(255,255,255,0.96);
+    border-radius: 6px; padding: 2px 6px;
+    font-size: 10px; font-weight: 700; color: #1A1D26;
+    white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+    max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+    direction: rtl;
+  }
+
+  .leaflet-popup-content-wrapper { border-radius: 14px; }
+  .leaflet-popup-content { direction: rtl; text-align: right; margin: 12px 14px; }
+  .p-price { font-size: 18px; font-weight: 800; color: #1f6feb; }
+  .p-city { font-size: 13px; color: #1A1D26; margin-top: 3px; font-weight: 600; }
+  .p-meta { font-size: 12px; color: #8A92A6; margin-top: 3px; }
+  .p-btn {
+    display: block; margin-top: 10px; background: #1f6feb; color: #fff;
+    text-align: center; padding: 8px; border-radius: 10px;
+    font-size: 13px; font-weight: 700; text-decoration: none;
+  }
+  .poi-name { font-size: 14px; font-weight: 700; color: #1A1D26; }
+  .poi-kind { font-size: 11px; color: #8A92A6; margin-top: 3px; }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <script>
-  var map = L.map('map').setView([31.7, 35.0], 7);
+  var map = L.map('map', { zoomControl: false }).setView([31.7, 35.0], 8);
+  L.control.zoom({ position: 'topleft' }).addTo(map);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap'
   }).addTo(map);
 
-  var icon = L.divIcon({
+  var homeIcon = L.divIcon({
     className: '',
     html: '<div class="home-pin"><span>&#127968;</span></div>',
-    iconSize: [30, 30],
-    iconAnchor: [15, 30],
-    popupAnchor: [0, -30]
+    iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -36]
   });
 
   var points = ${JSON.stringify(points)};
+  var places = ${JSON.stringify(places)};
   var markers = [];
 
   points.forEach(function (p) {
-    var m = L.marker([p.lat, p.lng], { icon: icon }).addTo(map);
+    var m = L.marker([p.lat, p.lng], { icon: homeIcon, zIndexOffset: 1000 }).addTo(map);
     m.bindPopup(
       '<div class="p-price">' + p.price + '</div>' +
       '<div class="p-city">' + p.city + '</div>' +
@@ -80,9 +155,23 @@ function buildHtml(points) {
     markers.push(m);
   });
 
-  function open_(id) {
-    window.ReactNativeWebView.postMessage(id);
-  }
+  places.forEach(function (q) {
+    var icon = L.divIcon({
+      className: '',
+      html: '<div class="poi-wrap">' +
+            '<div class="poi-pin" style="background:' + q.color + '">' + q.emoji + '</div>' +
+            '<div class="poi-label">' + q.name + '</div>' +
+            '</div>',
+      iconSize: [110, 46], iconAnchor: [55, 14], popupAnchor: [0, -14]
+    });
+    var m = L.marker([q.lat, q.lng], { icon: icon }).addTo(map);
+    m.bindPopup(
+      '<div class="poi-name">' + q.name + '</div>' +
+      '<div class="poi-kind">' + q.label + '</div>'
+    );
+  });
+
+  function open_(id) { window.ReactNativeWebView.postMessage(id); }
 
   if (markers.length) {
     var group = L.featureGroup(markers);
@@ -95,8 +184,12 @@ function buildHtml(points) {
 
 export default function MapScreen() {
   const [points, setPoints] = useState([]);
+  const [places, setPlaces] = useState([]);
+  const [active, setActive] = useState({});
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState('sale');
+  const [poiLoading, setPoiLoading] = useState(false);
+  const [toast, setToast] = useState('');
+  const [mode, setMode] = useState('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,29 +211,147 @@ export default function MapScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  function bboxFrom(pts) {
+    if (!pts.length) return '29.4,34.2,33.4,35.9';
+
+    const lats = pts.map((p) => p.lat);
+    const lngs = pts.map((p) => p.lng);
+
+    let minLat = Math.min(...lats);
+    let maxLat = Math.max(...lats);
+    let minLng = Math.min(...lngs);
+    let maxLng = Math.max(...lngs);
+
+    const MIN_SPAN = 0.08;
+    if (maxLat - minLat < MIN_SPAN) {
+      const mid = (maxLat + minLat) / 2;
+      minLat = mid - MIN_SPAN / 2;
+      maxLat = mid + MIN_SPAN / 2;
+    }
+    if (maxLng - minLng < MIN_SPAN) {
+      const mid = (maxLng + minLng) / 2;
+      minLng = mid - MIN_SPAN / 2;
+      maxLng = mid + MIN_SPAN / 2;
+    }
+
+    const pad = 0.04;
+    return [minLat - pad, minLng - pad, maxLat + pad, maxLng + pad].join(',');
+  }
+
+ async function fetchOverpass(query) {
+    const servers = [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+      'https://overpass.osm.ch/api/interpreter',
+    ];
+
+    const attempts = servers.map((url) =>
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'data=' + encodeURIComponent(query),
+      }).then(async (res) => {
+        if (!res.ok) throw new Error('status ' + res.status);
+        const json = await res.json();
+        if (!json.elements?.length) throw new Error('empty');
+        return json;
+      })
+    );
+
+    return Promise.any(attempts);
+  }
+
+  async function toggleLayer(layer) {
+    const on = !!active[layer.key];
+
+    if (on) {
+      setActive((a) => ({ ...a, [layer.key]: false }));
+      setPlaces((p) => p.filter((x) => x.key !== layer.key));
+      return;
+    }
+
+    setActive((a) => ({ ...a, [layer.key]: true }));
+    setPoiLoading(true);
+    setToast(T.loadingPlaces);
+
+    const bbox = bboxFrom(points);
+    const q = `[out:json][timeout:20];(${layer.filter}(${bbox}););out center 60;`;
+
+    try {
+      const json = await fetchOverpass(q);
+
+      const found = (json.elements ?? [])
+        .map((el) => ({
+          key: layer.key,
+          label: layer.label,
+          color: layer.color,
+          emoji: layer.emoji,
+          name: el.tags?.['name:he'] ?? el.tags?.name ?? T.noName,
+          lat: el.lat ?? el.center?.lat,
+          lng: el.lon ?? el.center?.lon,
+        }))
+        .filter((x) => x.lat && x.lng);
+
+      setPlaces((p) => [...p.filter((x) => x.key !== layer.key), ...found]);
+      setToast('');
+    } catch (err) {
+      logSupabase('map.overpass', { message: String(err) }, { layer: layer.key });
+      setActive((a) => ({ ...a, [layer.key]: false }));
+      setToast(T.noneFound);
+      setTimeout(() => setToast(''), 2500);
+    }
+
+    setPoiLoading(false);
+  }
+
   return (
     <View style={s.wrap}>
-      <View style={s.header}>
-     <BackBar
-          title={T.heading}
-          right={<Text style={s.count}>{points.length + ' ' + T.results}</Text>}
-        />
+      <BackBar
+        title={T.heading}
+        right={<Text style={s.count}>{points.length + ' ' + T.results}</Text>}
+      />
 
+      <View style={s.controls}>
         <View style={s.segment}>
-          {[
-            { k: 'sale', l: T.sale },
-            { k: 'rent', l: T.rent },
-            { k: 'all', l: T.all },
-          ].map((x) => (
-            <Pressable
-              key={x.k}
-              style={[s.segBtn, mode === x.k && s.segOn]}
-              onPress={() => setMode(x.k)}
-            >
-              <Text style={mode === x.k ? s.segTextOn : s.segText}>{x.l}</Text>
-            </Pressable>
-          ))}
+          <Pressable
+            style={[s.segBtn, mode === 'all' && s.segOn]}
+            onPress={() => setMode('all')}
+          >
+            <Text style={mode === 'all' ? s.segTextOn : s.segText}>{T.all}</Text>
+          </Pressable>
+          <Pressable
+            style={[s.segBtn, mode === 'sale' && s.segOn]}
+            onPress={() => setMode('sale')}
+          >
+            <Text style={mode === 'sale' ? s.segTextOn : s.segText}>{T.sale}</Text>
+          </Pressable>
+          <Pressable
+            style={[s.segBtn, mode === 'rent' && s.segOn]}
+            onPress={() => setMode('rent')}
+          >
+            <Text style={mode === 'rent' ? s.segTextOn : s.segText}>{T.rent}</Text>
+          </Pressable>
         </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.pills}
+        >
+          {LAYERS.map((l) => {
+            const on = !!active[l.key];
+            return (
+              <Pressable
+                key={l.key}
+                style={[s.pill, on && { backgroundColor: l.color, borderColor: l.color }]}
+                onPress={() => { if (!loading) toggleLayer(l); }}
+              >
+                <Ionicons name={l.icon} size={17} color={on ? '#fff' : l.color} />
+                <Text style={[s.pillText, on && s.pillTextOn]}>{l.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
       <View style={{ flex: 1 }}>
@@ -150,9 +361,9 @@ export default function MapScreen() {
           </View>
         ) : (
           <WebView
-            key={mode + '-' + points.length}
+            key={mode + '-' + points.length + '-' + places.length}
             originWhitelist={['*']}
-            source={{ html: buildHtml(points) }}
+            source={{ html: buildHtml(points, places) }}
             style={{ flex: 1 }}
             onMessage={(e) => {
               const id = e.nativeEvent.data;
@@ -161,10 +372,10 @@ export default function MapScreen() {
           />
         )}
 
-        {!loading && points.length === 0 ? (
-          <View style={s.emptyBar}>
-            <Ionicons name="information-circle-outline" size={16} color={C.textMuted} />
-            <Text style={s.emptyText}>{T.empty}</Text>
+        {toast ? (
+          <View style={s.toast}>
+            {poiLoading ? <ActivityIndicator size="small" color={C.primary} /> : null}
+            <Text style={s.toastText}>{toast}</Text>
           </View>
         ) : null}
       </View>
@@ -174,17 +385,29 @@ export default function MapScreen() {
 
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: C.page },
-  header: { backgroundColor: C.page, paddingBottom: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: C.border },
-  headerTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  titleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  h1: { fontSize: 22, fontWeight: '700', color: C.text },
   count: { fontSize: 12, color: C.textMuted },
-  segment: { flexDirection: 'row-reverse', backgroundColor: C.surface, borderRadius: 14, padding: 4 },
+  controls: { paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  segment: { flexDirection: 'row-reverse', backgroundColor: C.surface, borderRadius: 14, padding: 4, marginHorizontal: 16 },
   segBtn: { flex: 1, paddingVertical: 9, borderRadius: 11, alignItems: 'center' },
   segOn: { backgroundColor: C.primary },
   segText: { color: C.textSecondary, fontSize: 13, fontWeight: '600' },
   segTextOn: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  pills: { flexDirection: 'row-reverse', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
+  pill: {
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 7,
+    borderWidth: 1.5, borderColor: C.border, backgroundColor: C.page,
+    borderRadius: 24, paddingHorizontal: 15, paddingVertical: 10,
+  },
+  pillText: { fontSize: 14, fontWeight: '600', color: C.textSecondary },
+  pillTextOn: { color: '#fff' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyBar: { position: 'absolute', bottom: 24, alignSelf: 'center', flexDirection: 'row-reverse', alignItems: 'center', gap: 7, backgroundColor: 'rgba(255,255,255,0.96)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, shadowColor: '#1A1D26', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 },
-  emptyText: { color: C.textSecondary, fontSize: 13 },
+  toast: {
+    position: 'absolute', bottom: 24, alignSelf: 'center',
+    flexDirection: 'row-reverse', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.97)', borderRadius: 22,
+    paddingHorizontal: 18, paddingVertical: 11,
+    shadowColor: '#1A1D26', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
+  },
+  toastText: { color: C.textSecondary, fontSize: 13, fontWeight: '600' },
 });

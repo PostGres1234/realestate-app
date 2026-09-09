@@ -6,8 +6,9 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { getDraft, saveDraft, clearDraft, markSeen } from '../../lib/inbox';
 import { placeCall, canCall, getBuyerContact } from '../../lib/calls';
-import { logSupabase } from '../../lib/logger';
+import { logSupabase, friendlyError } from '../../lib/logger';
 import { C } from '../../lib/theme';
+import ReportSheet from '../../components/ReportSheet';
 
 const T = {
   call: 'התקשרות',
@@ -20,6 +21,7 @@ const T = {
   waiting: 'ממתינים לתגובה של בעל הנכס',
   today: 'היום',
   yesterday: 'אתמול',
+  sendFail: 'לא ניתן לשלוח את ההודעה',
 };
 
 export default function Chat() {
@@ -33,6 +35,7 @@ export default function Chat() {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  const [reportOpen, setReportOpen] = useState(false);
   const listRef = useRef(null);
 
   useEffect(() => {
@@ -133,6 +136,7 @@ export default function Chat() {
       logSupabase('chat.send', error, { conversationId: id });
       setText(body);
       saveDraft(id, body);
+      Alert.alert(T.sendFail, friendlyError(error, error.message));
     }
   }
 
@@ -158,6 +162,9 @@ export default function Chat() {
 
   const isBuyer = conv && user?.id === conv.buyer_id;
   const locked = isBuyer && conv?.intro_sent && !conv?.unlocked;
+  const otherUser = conv
+    ? (user?.id === conv.buyer_id ? conv.seller_id : conv.buyer_id)
+    : null;
 
   const withDates = [];
   let lastDay = null;
@@ -175,7 +182,7 @@ export default function Chat() {
       <View style={s.center}>
         <Text style={s.errTitle}>{T.loadFail}</Text>
         <Text style={s.errMeta}>{err}</Text>
-        <Pressable onPress={() => router.back()}>
+        <Pressable onPress={() => router.replace('/messages')}>
           <Text style={s.link}>{T.back}</Text>
         </Pressable>
       </View>
@@ -188,8 +195,15 @@ export default function Chat() {
 
       <View style={s.header}>
         <View style={s.headerTop}>
-          <Pressable style={s.backBtn} onPress={() => router.back()} hitSlop={10}>
-            <Ionicons name="chevron-forward" size={24} color={C.text} />
+          <Pressable
+            style={s.backBtn}
+            onPress={() => {
+              if (router.canGoBack()) router.back();
+              else router.replace('/messages');
+            }}
+            hitSlop={10}
+          >
+            <Ionicons name="chevron-forward" size={22} color="#fff" />
           </Pressable>
 
           <View style={{ flex: 1 }}>
@@ -202,6 +216,10 @@ export default function Chat() {
                 : (prop ? prop.city + '  ·  ' + money(prop.price) : '')}
             </Text>
           </View>
+
+          <Pressable onPress={() => setReportOpen(true)} hitSlop={8}>
+            <Ionicons name="flag-outline" size={20} color={C.textMuted} />
+          </Pressable>
 
           {callable ? (
             <Pressable style={s.callBtn} onPress={onCall} hitSlop={8}>
@@ -284,6 +302,13 @@ export default function Chat() {
           />
         </View>
       )}
+
+      <ReportSheet
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        targetUser={otherUser}
+        onBlocked={() => router.replace('/messages')}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -294,13 +319,13 @@ const s = StyleSheet.create({
   errTitle: { fontSize: 18, fontWeight: '600', color: C.text },
   errMeta: { color: C.textMuted, fontSize: 14, textAlign: 'center' },
   link: { color: C.primary, fontWeight: '600', fontSize: 15 },
-  header: { backgroundColor: C.page, paddingTop: 56, paddingBottom: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  header: { backgroundColor: C.page, paddingTop: 44, paddingBottom: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: C.border },
   headerTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
-  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '700', color: C.text, textAlign: 'right' },
   headerSub: { fontSize: 12, color: C.textMuted, textAlign: 'right', marginTop: 2 },
   callBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#1D9E75', alignItems: 'center', justifyContent: 'center' },
-  phoneChip: { flexDirection: 'row-reverse', alignSelf: 'flex-end', alignItems: 'center', gap: 5, backgroundColor: C.primaryTint, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, marginTop: 10, marginRight: 42 },
+  phoneChip: { flexDirection: 'row-reverse', alignSelf: 'flex-end', alignItems: 'center', gap: 5, backgroundColor: C.primaryTint, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, marginTop: 10, marginRight: 46 },
   phoneText: { color: C.primary, fontSize: 12, fontWeight: '700' },
   sepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 10 },
   sepLine: { flex: 1, height: 1, backgroundColor: '#E3E8F0' },
