@@ -1,12 +1,12 @@
-import { useState, useCallback } from 'react';
-import { View, Text, FlatList, Pressable, ActivityIndicator, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { supabase } from '../lib/supabase';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import BackBar from '../components/BackBar';
 import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 import { C } from '../lib/theme';
-import BackBar from '../components/BackBar';
 
 const T = {
   heading: 'נכסים שמורים',
@@ -200,3 +200,4 @@ const s = StyleSheet.create({
   btn: { backgroundColor: C.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
 });
+kejgldjgdlgkjdlkgjdlkgjdflkgjdlkgjgj
