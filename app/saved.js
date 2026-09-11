@@ -200,4 +200,3 @@ const s = StyleSheet.create({
   btn: { backgroundColor: C.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
 });
-kejgldjgdlgkjdlkgjdlkgjdflkgjdlkgjgj
