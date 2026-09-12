@@ -1,13 +1,13 @@
-import { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, Pressable, FlatList, Image, KeyboardAvoidingView, Platform, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../lib/auth';
-import { logSupabase } from '../lib/logger';
-import { C } from '../lib/theme';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import BackBar from '../components/BackBar';
 import TabBar from '../components/TabBar';
+import { useAuth } from '../lib/auth';
+import { logSupabase } from '../lib/logger';
+import { supabase } from '../lib/supabase';
+import { C } from '../lib/theme';
 
 const T = {
   heading: 'ג׳ימי',
@@ -75,26 +75,35 @@ export default function Assistant() {
     setBusy(true);
 
     try {
-      const { data: sess } = await supabase.auth.getSession();
+      const { data: sess, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sess?.session?.access_token) throw new Error('Assistant requires an active session');
       const url = process.env.EXPO_PUBLIC_SUPABASE_URL + '/functions/v1/clever-worker';
 
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
+          apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
           authorization: 'Bearer ' + sess?.session?.access_token,
         },
         body: JSON.stringify({
-          messages: next.map((m) => ({ role: m.role, content: m.content })),
+          messages: next.filter((m) => !m.failed).map((m) => ({ role: m.role, content: m.content })),
           listings: listings.slice(0, 40),
         }),
       });
 
+      if (!res.ok) {
+        throw new Error('Assistant request failed (HTTP ' + res.status + ')');
+      }
       const out = await res.json();
+      if (out?.error) throw new Error('Assistant service returned an error');
+      const reply = typeof out?.text === 'string' ? out.text.trim() : '';
+      if (!reply) throw new Error('Assistant response is missing non-empty text');
       setMessages([...next, {
         role: 'assistant',
-        content: out.text ?? '',
-        ids: out.ids ?? [],
+        content: reply,
+        ids: Array.isArray(out.ids) ? out.ids.filter((id) => typeof id === 'string') : [],
       }]);
     } catch (err) {
       logSupabase('assistant.send', { message: String(err) });
@@ -102,9 +111,11 @@ export default function Assistant() {
         role: 'assistant',
         content: 'אירעה שגיאה בחיבור. נסו שוב.',
         ids: [],
+        failed: true,
       }]);
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   function restart() {
