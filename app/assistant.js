@@ -18,9 +18,28 @@ const T = {
   perMonth: 'לחודש',
   rooms: 'חד׳',
   sqm: 'מ"ר',
-  opener: 'היי, אני ג׳ימי. אעזור לכם למצוא נכס שמתאים לכם.\n\nנתחיל מהדבר הראשון: אתם מחפשים לקנות או לשכור?',
+  opener: 'היי, אני ג׳ימי. אני כאן כדי לעזור.\n\nאתם מחפשים נכס, או שיש לכם נכס למכירה או להשכרה?',
   error: 'אירעה שגיאה בחיבור. נסו שוב.',
 };
+
+function Bubble({ content, mine }) {
+  const parts = content.split(/(\*\*[^*]+\*\*)/g);
+
+  return (
+    <Text style={mine ? s.mineText : s.botText}>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return (
+            <Text key={i} style={s.highlight}>
+              {part.slice(2, -2)}
+            </Text>
+          );
+        }
+        return part;
+      })}
+    </Text>
+  );
+}
 
 export default function Assistant() {
   const { user } = useAuth();
@@ -157,7 +176,7 @@ export default function Assistant() {
                   </View>
                 ) : null}
                 <View style={[s.bubble, mine ? s.mine : s.bot]}>
-                  <Text style={mine ? s.mineText : s.botText}>{item.content}</Text>
+                  <Bubble content={item.content} mine={mine} />
                 </View>
               </View>
 
@@ -261,4 +280,5 @@ const s = StyleSheet.create({
   muted: { color: C.textSecondary, fontSize: 16, textAlign: 'center' },
   btn: { backgroundColor: C.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+    highlight: { fontWeight: '800', color: C.primary, backgroundColor: C.primaryTint },
 });
