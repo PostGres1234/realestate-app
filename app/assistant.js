@@ -11,19 +11,20 @@ import { C } from '../lib/theme';
 
 const T = {
   heading: 'ג׳ימי',
-  sub: 'היועץ שיעזור לכם למצוא איפה לגור',
+  sub: 'היועץ שיעזור לכם למצוא נכס',
   placeholder: 'כתבו לג׳ימי...',
   guest: 'התחברו כדי לדבר עם ג׳ימי',
   login: 'התחברות',
   perMonth: 'לחודש',
   rooms: 'חד׳',
   sqm: 'מ"ר',
-  opener: 'היי, אני ג׳ימי. אני כאן כדי לעזור לכם להבין איפה כדאי לגור.\n\nבואו נתחיל מהדברים שמשפיעים על היום-יום: איפה אתם עובדים, ואיך אתם מגיעים לשם?',
+  opener: 'היי, אני ג׳ימי. אעזור לכם למצוא נכס שמתאים לכם.\n\nספרו לי מה אתם מחפשים - תקציב, אזור, וכל דבר אחר שחשוב לכם.',
   starters: [
-    'אני עובד בטכניון',
-    'יש לי ילדים בבית ספר',
-    'אני מחפש להשכיר',
+    'מחפש דירה בחיפה עד 2.5 מיליון',
+    'רוצה לשכור, קרוב לטכניון',
+    'בית פרטי עם חצר',
   ],
+  error: 'אירעה שגיאה בחיבור. נסו שוב.',
 };
 
 export default function Assistant() {
@@ -75,47 +76,32 @@ export default function Assistant() {
     setBusy(true);
 
     try {
-      const { data: sess, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) throw sessionError;
-      if (!sess?.session?.access_token) throw new Error('Assistant requires an active session');
+      const { data: sess } = await supabase.auth.getSession();
       const url = process.env.EXPO_PUBLIC_SUPABASE_URL + '/functions/v1/clever-worker';
 
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
           authorization: 'Bearer ' + sess?.session?.access_token,
         },
         body: JSON.stringify({
-          messages: next.filter((m) => !m.failed).map((m) => ({ role: m.role, content: m.content })),
+          messages: next.map((m) => ({ role: m.role, content: m.content })),
           listings: listings.slice(0, 40),
         }),
       });
 
-      if (!res.ok) {
-        throw new Error('Assistant request failed (HTTP ' + res.status + ')');
-      }
       const out = await res.json();
-      if (out?.error) throw new Error('Assistant service returned an error');
-      const reply = typeof out?.text === 'string' ? out.text.trim() : '';
-      if (!reply) throw new Error('Assistant response is missing non-empty text');
       setMessages([...next, {
         role: 'assistant',
-        content: reply,
-        ids: Array.isArray(out.ids) ? out.ids.filter((id) => typeof id === 'string') : [],
+        content: out.text || T.error,
+        ids: out.ids ?? [],
       }]);
     } catch (err) {
       logSupabase('assistant.send', { message: String(err) });
-      setMessages([...next, {
-        role: 'assistant',
-        content: 'אירעה שגיאה בחיבור. נסו שוב.',
-        ids: [],
-        failed: true,
-      }]);
-    } finally {
-      setBusy(false);
+      setMessages([...next, { role: 'assistant', content: T.error, ids: [] }]);
     }
+    setBusy(false);
   }
 
   function restart() {
