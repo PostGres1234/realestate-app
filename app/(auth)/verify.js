@@ -50,7 +50,7 @@ export default function Verify() {
       setCode('');
       return Alert.alert(T.failTitle, res.message);
     }
-    router.replace('/');
+    router.replace('/payment');
   }
 
   async function resend() {

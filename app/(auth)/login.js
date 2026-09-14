@@ -33,7 +33,7 @@ export default function Login() {
     });
     setBusy(false);
     if (error) return Alert.alert(T.failTitle, error.message);
-    router.replace('/');
+    router.replace('/payment');
   }
 
   return (

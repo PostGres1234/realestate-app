@@ -132,7 +132,7 @@ export default function SignUp() {
     }
 
     setBusy(false);
-    router.replace('/');
+    router.replace('/payment');
   }
 
   return (
