@@ -18,12 +18,7 @@ const T = {
   perMonth: 'לחודש',
   rooms: 'חד׳',
   sqm: 'מ"ר',
-  opener: 'היי, אני ג׳ימי. אעזור לכם למצוא נכס שמתאים לכם.\n\nספרו לי מה אתם מחפשים - תקציב, אזור, וכל דבר אחר שחשוב לכם.',
-  starters: [
-    'מחפש דירה בחיפה עד 2.5 מיליון',
-    'רוצה לשכור, קרוב לטכניון',
-    'בית פרטי עם חצר',
-  ],
+  opener: 'היי, אני ג׳ימי. אעזור לכם למצוא נכס שמתאים לכם.\n\nנתחיל מהדבר הראשון: אתם מחפשים לקנות או לשכור?',
   error: 'אירעה שגיאה בחיבור. נסו שוב.',
 };
 
@@ -66,8 +61,8 @@ export default function Assistant() {
     })();
   }, [user]);
 
-  async function send(override) {
-    const body = (override ?? text).trim();
+  async function send() {
+    const body = text.trim();
     if (!body || busy) return;
 
     const next = [...messages, { role: 'user', content: body }];
@@ -106,6 +101,7 @@ export default function Assistant() {
 
   function restart() {
     setMessages([{ role: 'assistant', content: T.opener, ids: [] }]);
+    setText('');
   }
 
   const money = (n) => '\u20AA' + new Intl.NumberFormat('he-IL').format(n);
@@ -148,7 +144,7 @@ export default function Assistant() {
         contentContainerStyle={{ padding: 16, gap: 12 }}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item, index }) => {
+        renderItem={({ item }) => {
           const mine = item.role === 'user';
           const cards = (item.ids ?? []).map((id) => byId[id]).filter(Boolean);
 
@@ -198,16 +194,6 @@ export default function Assistant() {
                   )}
                 />
               ) : null}
-
-              {index === 0 && messages.length === 1 ? (
-                <View style={s.starters}>
-                  {T.starters.map((sTxt) => (
-                    <Pressable key={sTxt} style={s.starter} onPress={() => send(sTxt)}>
-                      <Text style={s.starterText}>{sTxt}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
             </View>
           );
         }}
@@ -228,7 +214,7 @@ export default function Assistant() {
       <View style={s.composer}>
         <Pressable
           style={[s.sendBtn, (!text.trim() || busy) && s.sendOff]}
-          onPress={() => send()}
+          onPress={send}
           disabled={!text.trim() || busy}
         >
           <Ionicons name="arrow-up" size={20} color="#fff" />
@@ -260,9 +246,6 @@ const s = StyleSheet.create({
   bot: { backgroundColor: C.page, borderBottomRightRadius: 5, borderWidth: 1, borderColor: '#E8ECF3' },
   mineText: { color: '#fff', fontSize: 15, textAlign: 'right', lineHeight: 22 },
   botText: { color: C.text, fontSize: 15, textAlign: 'right', lineHeight: 22 },
-  starters: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginTop: 12, justifyContent: 'flex-end' },
-  starter: { borderWidth: 1, borderColor: C.primary, borderRadius: 18, paddingHorizontal: 13, paddingVertical: 8, backgroundColor: C.page },
-  starterText: { color: C.primary, fontSize: 13, fontWeight: '600' },
   card: { width: 190, borderRadius: 14, backgroundColor: C.page, overflow: 'hidden', borderWidth: 1, borderColor: C.border },
   cardImg: { width: '100%', height: 100, backgroundColor: C.placeholder },
   cardImgEmpty: { alignItems: 'center', justifyContent: 'center' },
