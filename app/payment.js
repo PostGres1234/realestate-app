@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { C } from '../lib/theme';
 
 const T = {
@@ -51,6 +51,11 @@ export default function Payment() {
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
+  const scrollRef = useRef(null);
+
+  function scrollToBottom() {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+  }
 
   function submit() {
     if (!method) return Alert.alert(T.checkTitle, T.needMethod);
@@ -68,11 +73,16 @@ export default function Payment() {
   }
 
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={s.wrap}
-      contentContainerStyle={{ padding: 24, paddingTop: 70, paddingBottom: 60 }}
-      keyboardShouldPersistTaps="handled"
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 24, paddingTop: 70, paddingBottom: 60 }}
+        keyboardShouldPersistTaps="handled"
+      >
       <Text style={s.title}>{T.title}</Text>
       <Text style={s.subtitle}>{T.subtitle}</Text>
 
@@ -129,6 +139,7 @@ export default function Payment() {
                 keyboardType="number-pad"
                 value={expiry}
                 onChangeText={(v) => setExpiry(formatExpiry(v))}
+                onFocus={scrollToBottom}
                 maxLength={5}
               />
             </View>
@@ -142,6 +153,7 @@ export default function Payment() {
                 secureTextEntry
                 value={cvv}
                 onChangeText={(v) => setCvv(v.replace(/\D/g, '').slice(0, 4))}
+                onFocus={scrollToBottom}
                 maxLength={4}
               />
             </View>
@@ -158,6 +170,7 @@ export default function Payment() {
         <Text style={s.btnText}>{T.submit}</Text>
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
