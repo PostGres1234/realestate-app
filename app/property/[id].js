@@ -35,6 +35,9 @@ const T = {
   occPlaceholder: 'לדוגמה: מהנדס תוכנה',
   noteLabel: 'הודעה (אופציונלי)',
   notePlaceholder: 'מתי נוח לכם לראות את הנכס?',
+  messageLabel: 'תוכן ההודעה',
+  messageHint: 'ניתן לערוך את הטקסט הזה. פתיח הפנייה קבוע ולא ניתן לעריכה.',
+  resetMessage: 'איפוס לטקסט האוטומטי',
   sendIntro: 'שליחת פנייה',
   sendingIntro: 'שולח...',
   cancel: 'ביטול',
@@ -72,6 +75,21 @@ export default function PropertyDetail() {
   const [occupation, setOccupation] = useState('');
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
+  const [customBody, setCustomBody] = useState('');
+  const [bodyEdited, setBodyEdited] = useState(false);
+
+  const greeting = p ? 'שלום, מתעניין/ת בנכס: ' + (p.title ?? p.city) : '';
+
+  function autoBody() {
+    const lines = ['שם: ' + fName.trim() + ' ' + lName.trim(), 'עיסוק: ' + occupation.trim()];
+    if (note.trim()) { lines.push(''); lines.push(note.trim()); }
+    return lines.join('\n');
+  }
+
+  useEffect(() => {
+    if (!bodyEdited) setCustomBody(autoBody());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fName, lName, occupation, note, bodyEdited]);
 
   useEffect(() => {
     (async () => {
@@ -140,15 +158,12 @@ export default function PropertyDetail() {
       return Alert.alert(T.error, friendlyError(error, error.message));
     }
 
-    const lines = ['שלום, מתעניין/ת בנכס: ' + (p.title ?? p.city)];
-    lines.push('שם: ' + fName.trim() + ' ' + lName.trim());
-    lines.push('עיסוק: ' + occupation.trim());
-    if (note.trim()) { lines.push(''); lines.push(note.trim()); }
+    const body = greeting + '\n' + customBody.trim();
 
     const { error: msgErr } = await supabase.from('messages').insert({
       conversation_id: conv.id,
       sender_id: user.id,
-      body: lines.join('\n'),
+      body,
     });
     if (msgErr) logSupabase('detail.introMessage', msgErr);
 
@@ -287,6 +302,23 @@ export default function PropertyDetail() {
                 placeholder={T.notePlaceholder} placeholderTextColor="#A9B0BF"
                 multiline value={note} onChangeText={setNote} />
 
+              <Text style={s.fLabel}>{T.messageLabel}</Text>
+              <Text style={s.hintText}>{T.messageHint}</Text>
+              <View style={s.lockedLine}>
+                <Text style={s.lockedLineText}>{greeting}</Text>
+              </View>
+              <TextInput
+                style={[s.fInput, { minHeight: 110, textAlignVertical: 'top' }]}
+                multiline
+                value={customBody}
+                onChangeText={(v) => { setCustomBody(v); setBodyEdited(true); }}
+              />
+              {bodyEdited ? (
+                <Pressable onPress={() => setBodyEdited(false)} style={{ marginTop: 6 }}>
+                  <Text style={s.resetText}>{T.resetMessage}</Text>
+                </Pressable>
+              ) : null}
+
               <Pressable style={[s.btn, sending && { opacity: 0.5 }]}
                 onPress={sendIntro} disabled={sending}>
                 <Text style={s.btnText}>{sending ? T.sendingIntro : T.sendIntro}</Text>
@@ -342,4 +374,8 @@ const s = StyleSheet.create({
   fLabel: { fontSize: 13, fontWeight: '600', color: C.text, textAlign: 'right', marginBottom: 5, marginTop: 10 },
   fInput: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 12, padding: 12, fontSize: 15, textAlign: 'right', color: C.text },
   cancelText: { color: C.textMuted, textAlign: 'center', fontSize: 14 },
+  hintText: { fontSize: 12, color: C.textMuted, textAlign: 'right', marginBottom: 6 },
+  lockedLine: { backgroundColor: C.border, borderRadius: 12, padding: 12, marginBottom: 8 },
+  lockedLineText: { color: C.textSecondary, fontSize: 14, textAlign: 'right' },
+  resetText: { color: C.primary, fontSize: 12, fontWeight: '600', textAlign: 'right' },
 });
