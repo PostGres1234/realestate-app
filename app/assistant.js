@@ -252,7 +252,7 @@ export default function Assistant() {
                 />
               ) : null}
 
-              {!mine && ((item.options ?? []).length || item.skippable) ? (
+              {!mine && !cards.length && ((item.options ?? []).length || item.skippable) ? (
                 <View style={s.optionsRow}>
                   {(item.options ?? []).map((opt) => {
                     const isChosen = chosen.includes(opt);
@@ -306,7 +306,7 @@ export default function Assistant() {
       <View style={s.composer}>
         <Pressable
           style={[s.sendBtn, (!text.trim() || busy) && s.sendOff]}
-          onPress={send}
+          onPress={() => send()}
           disabled={!text.trim() || busy}
         >
           <Ionicons name="arrow-up" size={20} color="#fff" />
