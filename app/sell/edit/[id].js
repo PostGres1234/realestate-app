@@ -5,6 +5,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../lib/auth';
+import { logSupabase } from '../../../lib/logger';
 import { C } from '../../../lib/theme';
 
 const T = {
@@ -33,6 +34,7 @@ const T = {
   missingTitle: 'חסרים פרטים',
   missingBody: 'יש למלא כותרת, מחיר ועיר.',
   failTitle: 'השמירה נכשלה',
+  mediaFailBody: 'פרטי הנכס נשמרו, אך חלק מהקבצים לא הועלו. נסו להוסיף אותם שוב.',
   doneTitle: 'הנכס עודכן',
   doneBody: 'השינויים נשמרו.',
   delMediaTitle: 'מחיקת קובץ',
@@ -121,7 +123,7 @@ export default function EditListing() {
     if (!perm.granted) return Alert.alert(T.permTitle, T.permBody);
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsMultipleSelection: true,
       quality: 0.7,
     });
@@ -136,7 +138,7 @@ export default function EditListing() {
     if (!perm.granted) return Alert.alert(T.permTitle, T.permBody);
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: ['videos'],
       quality: 0.7,
       videoMaxDuration: 60,
     });
@@ -167,7 +169,10 @@ export default function EditListing() {
       ...newPhotos.map((p) => ({ asset: p, kind: 'image' })),
       ...(newVideo ? [{ asset: newVideo, kind: 'video' }] : []),
     ];
-    let pos = existing.length;
+    let pos = existing.length
+      ? Math.max(...existing.map((m) => m.position)) + 1
+      : 0;
+    let failures = 0;
 
     for (const { asset, kind } of items) {
       const ext = (asset.uri.split('.').pop() || (kind === 'video' ? 'mp4' : 'jpg'))
@@ -184,20 +189,32 @@ export default function EditListing() {
         .from('property-images')
         .upload(path, buffer, { contentType: mime, upsert: false });
 
-      if (upErr) { console.log('upload error', upErr.message); continue; }
+      if (upErr) {
+        logSupabase('listing.editUpload', upErr, { kind });
+        failures++;
+        continue;
+      }
 
       const { data: pub } = supabase.storage
         .from('property-images')
         .getPublicUrl(path);
 
-      await supabase.from('property_images').insert({
+      const { error: rowErr } = await supabase.from('property_images').insert({
         property_id: id,
         url: pub.publicUrl,
         position: pos,
         media_type: kind,
       });
+
+      if (rowErr) {
+        logSupabase('listing.editImageRow', rowErr, { kind });
+        failures++;
+        continue;
+      }
       pos++;
     }
+
+    return failures;
   }
 
   async function save() {
@@ -231,7 +248,12 @@ export default function EditListing() {
 
     if (newPhotos.length || newVideo) {
       setStage(T.uploading);
-      await uploadNew();
+      const failures = await uploadNew();
+      if (failures) {
+        setBusy(false);
+        Alert.alert(T.failTitle, T.mediaFailBody);
+        return;
+      }
     }
 
     setBusy(false);

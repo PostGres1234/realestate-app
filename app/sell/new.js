@@ -120,7 +120,7 @@ export default function NewListing() {
     if (!perm.granted) return Alert.alert(T.permTitle, T.permBody);
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsMultipleSelection: true,
       quality: 0.6,
       selectionLimit: MAX_PHOTOS - photos.length,
@@ -156,7 +156,7 @@ export default function NewListing() {
     if (!perm.granted) return Alert.alert(T.permTitle, T.permBody);
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: ['videos'],
       quality: 0.5,
       videoMaxDuration: 45,
     });

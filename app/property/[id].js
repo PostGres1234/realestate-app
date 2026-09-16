@@ -23,6 +23,7 @@ const T = {
   forSale: 'למכירה',
   featuresTitle: 'מה יש בנכס',
   locked: 'הצטרפו כדי לראות תיאור מלא, כתובת, מספר חדרים ושטח.',
+  mediaLocked: 'הצטרפו כדי לראות את התמונות',
   ctaGuest: 'הצטרפו כדי ליצור קשר',
   ctaUser: 'שליחת פנייה לבעל הנכס',
   report: 'דיווח על המודעה',
@@ -66,6 +67,7 @@ export default function PropertyDetail() {
   const { user } = useAuth();
   const [p, setP] = useState(null);
   const [media, setMedia] = useState([]);
+  const [mediaIndex, setMediaIndex] = useState(0);
   const [err, setErr] = useState(null);
 
   const [reportOpen, setReportOpen] = useState(false);
@@ -103,7 +105,9 @@ export default function PropertyDetail() {
       }
       setP(data);
 
-      if (user) supabase.rpc('track_view', { p_property: id });
+      if (!user) { setMedia([]); return; }
+
+      supabase.rpc('track_view', { p_property: id });
 
       const { data: m } = await supabase
         .from('property_images')
@@ -204,14 +208,43 @@ export default function PropertyDetail() {
 
   return (
     <ScrollView style={s.wrap} contentContainerStyle={{ paddingBottom: 40 }}>
-      {media.length ? (
-        <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
-          {media.map((m) =>
-            m.media_type === 'video'
-              ? <VideoSlide key={m.url} url={m.url} />
-              : <Image key={m.url} source={{ uri: m.url }} style={{ width: W, height: 280 }} />
-          )}
-        </ScrollView>
+      {!user ? (
+        <View style={[s.noMedia, s.mediaLocked]}>
+          <Ionicons name="lock-closed-outline" size={30} color={C.textMuted} />
+          <Text style={s.mediaLockedText}>{T.mediaLocked}</Text>
+        </View>
+      ) : media.length ? (
+        <View>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) =>
+              setMediaIndex(Math.round(e.nativeEvent.contentOffset.x / W))
+            }
+          >
+            {media.map((m) =>
+              m.media_type === 'video'
+                ? <VideoSlide key={m.url} url={m.url} />
+                : <Image key={m.url} source={{ uri: m.url }} style={{ width: W, height: 280 }} />
+            )}
+          </ScrollView>
+
+          {media.length > 1 ? (
+            <>
+              <View style={s.mediaCount}>
+                <Ionicons name="images" size={13} color="#fff" />
+                <Text style={s.mediaCountText}>{(mediaIndex + 1) + '/' + media.length}</Text>
+              </View>
+
+              <View style={s.dots}>
+                {media.map((m, i) => (
+                  <View key={m.url} style={[s.dot, i === mediaIndex && s.dotOn]} />
+                ))}
+              </View>
+            </>
+          ) : null}
+        </View>
       ) : (
         <View style={s.noMedia} />
       )}
@@ -346,6 +379,21 @@ const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: C.page },
   center: { alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12, marginTop: 60 },
   noMedia: { width: W, height: 120, backgroundColor: C.surface },
+  mediaLocked: { height: 220, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  mediaLockedText: { fontSize: 13, color: C.textMuted, fontWeight: '600' },
+  mediaCount: {
+    position: 'absolute', top: 52, left: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 12,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  mediaCountText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  dots: {
+    position: 'absolute', bottom: 12, left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'center', gap: 5,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.5)' },
+  dotOn: { backgroundColor: '#fff', width: 16 },
   body: { padding: 20 },
   dealTag: { alignSelf: 'flex-end', backgroundColor: C.primaryTint, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 8 },
   dealText: { color: C.primary, fontSize: 12, fontWeight: '700' },
