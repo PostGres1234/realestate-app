@@ -93,7 +93,19 @@ const SYSTEM = `קוראים לך ג׳ימי. אתה יועץ דיור באפל�
 אם משהו לא מסתדר, אמור זאת בכנות. למשל אם התקציב נמוך לאזור המבוקש.
 
 אם משתמש עונה על כמה דברים בבת אחת, אל תשאל עליהם שוב. דלג לשאלה הבאה שעוד לא נענתה.
-אם הם אומרים "לא משנה" או "גמיש", קבל את זה ועבור הלאה.
+אם הם אומרים "לא משנה", "גמיש" או "דילוג", קבל את זה בלי להתעכב ועבור מיד לשאלה הבאה - זה אומר שאין להם העדפה בנושא הזה, בין אם מדובר במאפייני הנכס או בכל דבר אחר.
+
+איך לדבר: היה חברותי, חם וגמיש. אפשר להשתמש בשכנוע עדין - להדגיש יתרונות, לחזק בחיוב בחירות טובות של המשתמש, לעודד אותם להמשיך ולחקור - אבל לעולם לא בלחץ או בתחושת מכירה. אם משתמש מהסס או לא בטוח, עזור לו בעדינות להתקדם במקום לחכות סתם.
+
+כשהשאלה שלך היא בחירה מתוך מספר קטן של אפשרויות ברורות (כמו קנייה או שכירות, סוג נכס, מה חייב להיות בנכס, למכור או להשכיר), סיים את ההודעה בשורה נפרדת בפורמט:
+OPTIONS: אפשרות1|אפשרות2|אפשרות3
+השתמש בזה רק כשמדובר במספר קטן וסגור של אפשרויות - לא לשאלות פתוחות, מספריות, כתובות, ערים או שכונות (יש יותר מדי אפשרויות אפשריות).
+אל תזכיר את השורה הזו בטקסט עצמו.
+
+כשהתשובה לשאלה שלך יכולה לכלול יותר מבחירה אחת בו-זמנית (כמו סוג נכס, מה חייב להיות בנכס, ערים, שכונות, קרבה למקומות), הוסף שורה נפרדת בפורמט:
+MULTI: yes
+זה מאפשר למשתמש לבחור כמה כפתורים ולשלוח אותם יחד. אל תוסיף את זה לשאלות עם תשובה אחת בלבד (כמו קנייה או שכירות, למכור או להשכיר, סוג עסקה).
+אל תזכיר את השורה הזו בטקסט עצמו.
 
 מגבלות:
 אל תעריך שווי של נכס ספציפי ואל תמליץ כמה להציע או כמה לבקש עבור נכס מסוים. זו עבודה של שמאי מוסמך.
@@ -200,13 +212,25 @@ Deno.serve(async (req) => {
       text = text.replace(/PROPERTIES:.*$/m, "").trim();
     }
 
-    return new Response(JSON.stringify({ text, ids }), {
+    let options: string[] = [];
+    const optMatch = text.match(/OPTIONS:\s*(.+)$/m);
+    if (optMatch) {
+      options = optMatch[1].split("|").map((s: string) => s.trim()).filter(Boolean);
+      text = text.replace(/OPTIONS:.*$/m, "").trim();
+    }
+
+    const multi = /MULTI:\s*yes/m.test(text);
+    text = text.replace(/MULTI:.*$/m, "").trim();
+
+    // Every Jimmy-generated question can be skipped - only the app's
+    // hardcoded opening message (never produced here) excludes it.
+    return new Response(JSON.stringify({ text, ids, options, skippable: true, multi }), {
       headers: { "content-type": "application/json", ...CORS },
     });
   } catch (e) {
     console.log("function error", String(e));
     return new Response(
-      JSON.stringify({ text: "אירעה שגיאה. נסו שוב.", ids: [] }),
+      JSON.stringify({ text: "אירעה שגיאה. נסו שוב.", ids: [], options: [], skippable: false, multi: false }),
       { headers: { "content-type": "application/json", ...CORS } }
     );
   }

@@ -19,7 +19,11 @@ const T = {
   rooms: 'חד׳',
   sqm: 'מ"ר',
   opener: 'היי, אני ג׳ימי. אני כאן כדי לעזור.\n\nאתם מחפשים נכס, או שיש לכם נכס למכירה או להשכרה?',
+  openerOption1: 'מחפש/ת נכס',
+  openerOption2: 'יש לי נכס למכירה או להשכרה',
   error: 'אירעה שגיאה בחיבור. נסו שוב.',
+  skip: 'דילוג',
+  confirm: 'אישור',
 };
 
 function Bubble({ content, mine }) {
@@ -44,12 +48,20 @@ function Bubble({ content, mine }) {
 export default function Assistant() {
   const { user } = useAuth();
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: T.opener, ids: [] },
+    {
+      role: 'assistant',
+      content: T.opener,
+      ids: [],
+      options: [T.openerOption1, T.openerOption2],
+      skippable: false,
+      multi: false,
+    },
   ]);
   const [listings, setListings] = useState([]);
   const [byId, setById] = useState({});
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState({});
   const listRef = useRef(null);
 
   useEffect(() => {
@@ -80,13 +92,13 @@ export default function Assistant() {
     })();
   }, [user]);
 
-  async function send() {
-    const body = text.trim();
+  async function send(overrideText) {
+    const body = (overrideText ?? text).trim();
     if (!body || busy) return;
 
     const next = [...messages, { role: 'user', content: body }];
     setMessages(next);
-    setText('');
+    if (!overrideText) setText('');
     setBusy(true);
 
     try {
@@ -110,16 +122,41 @@ export default function Assistant() {
         role: 'assistant',
         content: out.text || T.error,
         ids: out.ids ?? [],
+        options: out.options ?? [],
+        skippable: !!out.skippable,
+        multi: !!out.multi,
       }]);
     } catch (err) {
       logSupabase('assistant.send', { message: String(err) });
-      setMessages([...next, { role: 'assistant', content: T.error, ids: [] }]);
+      setMessages([...next, { role: 'assistant', content: T.error, ids: [], options: [], skippable: false, multi: false }]);
     }
     setBusy(false);
   }
 
+  function toggleOption(index, opt) {
+    setSelected((prev) => {
+      const cur = prev[index] ?? [];
+      const next = cur.includes(opt) ? cur.filter((o) => o !== opt) : [...cur, opt];
+      return { ...prev, [index]: next };
+    });
+  }
+
+  function confirmSelection(index) {
+    const chosen = selected[index] ?? [];
+    if (!chosen.length) return;
+    send(chosen.join(', '));
+  }
+
   function restart() {
-    setMessages([{ role: 'assistant', content: T.opener, ids: [] }]);
+    setMessages([{
+      role: 'assistant',
+      content: T.opener,
+      ids: [],
+      options: [T.openerOption1, T.openerOption2],
+      skippable: false,
+      multi: false,
+    }]);
+    setSelected({});
     setText('');
   }
 
@@ -163,9 +200,10 @@ export default function Assistant() {
         contentContainerStyle={{ padding: 16, gap: 12 }}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const mine = item.role === 'user';
           const cards = (item.ids ?? []).map((id) => byId[id]).filter(Boolean);
+          const chosen = selected[index] ?? [];
 
           return (
             <View>
@@ -212,6 +250,41 @@ export default function Assistant() {
                     </Pressable>
                   )}
                 />
+              ) : null}
+
+              {!mine && ((item.options ?? []).length || item.skippable) ? (
+                <View style={s.optionsRow}>
+                  {(item.options ?? []).map((opt) => {
+                    const isChosen = chosen.includes(opt);
+                    return (
+                      <Pressable
+                        key={opt}
+                        style={[s.optionChip, item.multi && isChosen && s.optionChipOn]}
+                        disabled={busy}
+                        onPress={() => (item.multi ? toggleOption(index, opt) : send(opt))}
+                      >
+                        <Text style={[s.optionChipText, item.multi && isChosen && s.optionChipTextOn]}>
+                          {opt}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                  {item.multi ? (
+                    <Pressable
+                      style={[s.confirmChip, !chosen.length && s.confirmChipOff]}
+                      disabled={busy || !chosen.length}
+                      onPress={() => confirmSelection(index)}
+                    >
+                      <Text style={s.confirmChipText}>{T.confirm}</Text>
+                    </Pressable>
+                  ) : null}
+                  {item.skippable ? (
+                    <Pressable style={s.skipChip} disabled={busy} onPress={() => send(T.skip)}>
+                      <Ionicons name="play-skip-forward-outline" size={13} color={C.textMuted} />
+                      <Text style={s.skipChipText}>{T.skip}</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               ) : null}
             </View>
           );
@@ -275,6 +348,16 @@ const s = StyleSheet.create({
   cardSpecs: { fontSize: 11, color: C.textSecondary, textAlign: 'right', marginTop: 4 },
   composer: { flexDirection: 'row-reverse', gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, backgroundColor: C.page, borderTopWidth: 1, borderTopColor: C.border, alignItems: 'flex-end' },
   input: { flex: 1, backgroundColor: '#F1F4F9', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 11, fontSize: 15, textAlign: 'right', color: C.text, maxHeight: 110 },
+  optionsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8, paddingHorizontal: 4, marginTop: 6, marginBottom: 4 },
+  optionChip: { borderWidth: 1, borderColor: C.primary, backgroundColor: C.primaryTint, borderRadius: 16, paddingHorizontal: 13, paddingVertical: 8 },
+  optionChipText: { color: C.primary, fontSize: 13, fontWeight: '600' },
+  optionChipOn: { backgroundColor: C.primary },
+  optionChipTextOn: { color: '#fff' },
+  confirmChip: { backgroundColor: C.primary, borderRadius: 16, paddingHorizontal: 15, paddingVertical: 8 },
+  confirmChipOff: { backgroundColor: '#C3CBD9' },
+  confirmChipText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  skipChip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: C.border, backgroundColor: C.page, borderRadius: 16, paddingHorizontal: 11, paddingVertical: 8 },
+  skipChipText: { color: C.textMuted, fontSize: 12, fontWeight: '600' },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
   sendOff: { backgroundColor: '#C3CBD9' },
   muted: { color: C.textSecondary, fontSize: 16, textAlign: 'center' },
