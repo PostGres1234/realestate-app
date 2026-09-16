@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { View, Text, TextInput, Pressable, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Modal, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -22,7 +22,47 @@ const T = {
   today: 'היום',
   yesterday: 'אתמול',
   sendFail: 'לא ניתן לשלוח את ההודעה',
+  editFail: 'לא ניתן לערוך את ההודעה',
+  editIntroTitle: 'עריכת הפרטים שלכם',
+  fNameLabel: 'שם פרטי',
+  lNameLabel: 'שם משפחה',
+  occLabel: 'עיסוק',
+  noteLabel: 'הודעה',
+  save: 'שמירה',
+  cancel: 'ביטול',
 };
+
+const GREETING_PREFIX = 'שלום, מתעניין/ת בנכס: ';
+
+function parseIntro(body) {
+  if (!body.startsWith(GREETING_PREFIX)) return null;
+  const nlIndex = body.indexOf('\n');
+  if (nlIndex === -1) return null;
+
+  const greeting = body.slice(0, nlIndex);
+  const rest = body.slice(nlIndex + 1);
+
+  const nameMatch = rest.match(/^שם:\s*(.*)$/m);
+  const occMatch = rest.match(/^עיסוק:\s*(.*)$/m);
+  if (!nameMatch || !occMatch) return null;
+
+  const nameParts = nameMatch[1].trim().split(/\s+/);
+  const fName = nameParts[0] ?? '';
+  const lName = nameParts.slice(1).join(' ');
+  const occupation = occMatch[1].trim();
+
+  const occLineEnd = rest.indexOf(occMatch[0]) + occMatch[0].length;
+  const note = rest.slice(occLineEnd).replace(/^\n+/, '').trim();
+
+  return { greeting, fName, lName, occupation, note };
+}
+
+function buildIntroBody({ greeting, fName, lName, occupation, note }) {
+  let body = greeting + '\n' + 'שם: ' + fName.trim() + ' ' + lName.trim()
+    + '\nעיסוק: ' + occupation.trim();
+  if (note.trim()) body += '\n\n' + note.trim();
+  return body;
+}
 
 export default function Chat() {
   const { id } = useLocalSearchParams();
@@ -36,6 +76,9 @@ export default function Chat() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editText, setEditText] = useState('');
+  const [introEdit, setIntroEdit] = useState(null);
   const listRef = useRef(null);
 
   useEffect(() => {
@@ -87,8 +130,12 @@ export default function Chat() {
       setLoading(false);
     })();
 
+    const topic = 'room:' + id;
+    const stale = supabase.getChannels().find((ch) => ch.topic === 'realtime:' + topic);
+    if (stale) supabase.removeChannel(stale);
+
     const channel = supabase
-      .channel('room:' + id)
+      .channel(topic)
       .on(
         'postgres_changes',
         {
@@ -108,6 +155,18 @@ export default function Chat() {
             return c;
           });
           if (user?.id) setCallable(await canCall(id, user.id));
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: 'conversation_id=eq.' + id,
+        },
+        (payload) => {
+          setMessages((prev) => prev.map((m) => (m.id === payload.new.id ? payload.new : m)));
         }
       )
       .subscribe();
@@ -138,6 +197,64 @@ export default function Chat() {
       saveDraft(id, body);
       Alert.alert(T.sendFail, friendlyError(error, error.message));
     }
+  }
+
+  function onLongPressMessage(item) {
+    const parsed = parseIntro(item.body);
+    if (parsed) return setIntroEdit({ id: item.id, ...parsed });
+    startEdit(item);
+  }
+
+  function startEdit(item) {
+    setEditingId(item.id);
+    setEditText(item.body);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditText('');
+  }
+
+  async function saveEdit(item) {
+    const trimmed = editText.trim();
+    if (!trimmed) return;
+    if (trimmed === item.body) return cancelEdit();
+
+    const { error } = await supabase
+      .from('messages')
+      .update({ body: trimmed })
+      .eq('id', item.id)
+      .eq('sender_id', user.id);
+
+    if (error) {
+      logSupabase('chat.editMessage', error, { messageId: item.id });
+      Alert.alert(T.editFail, friendlyError(error, error.message));
+      return;
+    }
+
+    setMessages((prev) => prev.map((m) => (m.id === item.id ? { ...m, body: trimmed } : m)));
+    cancelEdit();
+  }
+
+  async function saveIntroEdit() {
+    if (!introEdit.fName.trim() || !introEdit.lName.trim() || !introEdit.occupation.trim()) return;
+
+    const body = buildIntroBody(introEdit);
+
+    const { error } = await supabase
+      .from('messages')
+      .update({ body })
+      .eq('id', introEdit.id)
+      .eq('sender_id', user.id);
+
+    if (error) {
+      logSupabase('chat.editMessage', error, { messageId: introEdit.id });
+      Alert.alert(T.editFail, friendlyError(error, error.message));
+      return;
+    }
+
+    setMessages((prev) => prev.map((m) => (m.id === introEdit.id ? { ...m, body } : m)));
+    setIntroEdit(null);
   }
 
   async function onCall() {
@@ -264,14 +381,41 @@ export default function Chat() {
               );
             }
             const mine = item.sender_id === user?.id;
+            const isEditing = editingId === item.id;
             return (
               <View style={[s.bubbleRow, mine ? s.rowMine : s.rowTheirs]}>
-                <View style={[s.bubble, mine ? s.mine : s.theirs]}>
-                  <Text style={mine ? s.mineText : s.theirsText}>{item.body}</Text>
-                  <Text style={mine ? s.mineTime : s.theirsTime}>
-                    {time(item.created_at)}
-                  </Text>
-                </View>
+                <Pressable
+                  style={[s.bubble, mine ? s.mine : s.theirs]}
+                  onLongPress={mine ? () => onLongPressMessage(item) : undefined}
+                  disabled={!mine}
+                >
+                  {isEditing ? (
+                    <View>
+                      <TextInput
+                        style={s.editInput}
+                        value={editText}
+                        onChangeText={setEditText}
+                        multiline
+                        autoFocus
+                      />
+                      <View style={s.editActions}>
+                        <Pressable onPress={cancelEdit} hitSlop={8}>
+                          <Ionicons name="close" size={18} color="rgba(255,255,255,0.85)" />
+                        </Pressable>
+                        <Pressable onPress={() => saveEdit(item)} hitSlop={8}>
+                          <Ionicons name="checkmark" size={18} color="#fff" />
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      <Text style={mine ? s.mineText : s.theirsText}>{item.body}</Text>
+                      <Text style={mine ? s.mineTime : s.theirsTime}>
+                        {time(item.created_at)}
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
               </View>
             );
           }}
@@ -309,6 +453,46 @@ export default function Chat() {
         targetUser={otherUser}
         onBlocked={() => router.replace('/messages')}
       />
+
+      <Modal visible={!!introEdit} transparent animationType="slide"
+        onRequestClose={() => setIntroEdit(null)}>
+        <View style={s.backdrop}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+            keyboardShouldPersistTaps="handled">
+            <View style={s.sheet}>
+              <Text style={s.sheetTitle}>{T.editIntroTitle}</Text>
+
+              {introEdit ? (
+                <>
+                  <Text style={s.fLabel}>{T.fNameLabel}</Text>
+                  <TextInput style={s.fInput} value={introEdit.fName}
+                    onChangeText={(v) => setIntroEdit((p) => ({ ...p, fName: v }))} />
+
+                  <Text style={s.fLabel}>{T.lNameLabel}</Text>
+                  <TextInput style={s.fInput} value={introEdit.lName}
+                    onChangeText={(v) => setIntroEdit((p) => ({ ...p, lName: v }))} />
+
+                  <Text style={s.fLabel}>{T.occLabel}</Text>
+                  <TextInput style={s.fInput} value={introEdit.occupation}
+                    onChangeText={(v) => setIntroEdit((p) => ({ ...p, occupation: v }))} />
+
+                  <Text style={s.fLabel}>{T.noteLabel}</Text>
+                  <TextInput style={[s.fInput, { minHeight: 80, textAlignVertical: 'top' }]}
+                    multiline value={introEdit.note}
+                    onChangeText={(v) => setIntroEdit((p) => ({ ...p, note: v }))} />
+
+                  <Pressable style={s.btn} onPress={saveIntroEdit}>
+                    <Text style={s.btnText}>{T.save}</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setIntroEdit(null)} style={{ marginTop: 12 }}>
+                    <Text style={s.cancelText}>{T.cancel}</Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -340,6 +524,8 @@ const s = StyleSheet.create({
   theirsText: { color: C.text, fontSize: 15, textAlign: 'right', lineHeight: 21 },
   mineTime: { color: 'rgba(255,255,255,0.75)', fontSize: 10, marginTop: 3, textAlign: 'left' },
   theirsTime: { color: C.textMuted, fontSize: 10, marginTop: 3, textAlign: 'left' },
+  editInput: { color: '#fff', fontSize: 15, textAlign: 'right', lineHeight: 21, minWidth: 140, padding: 0 },
+  editActions: { flexDirection: 'row', gap: 14, marginTop: 6 },
   emptyBox: { alignItems: 'center', marginTop: 70, gap: 10 },
   emptyTitle: { fontSize: 16, fontWeight: '600', color: C.textSecondary },
   emptyHint: { fontSize: 13, color: C.textMuted },
@@ -349,4 +535,12 @@ const s = StyleSheet.create({
   sendBtnOff: { backgroundColor: '#C3CBD9' },
   lockedBar: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 18, paddingBottom: 32, backgroundColor: C.page, borderTopWidth: 1, borderTopColor: C.border },
   lockedText: { color: C.textMuted, fontSize: 13 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: { backgroundColor: C.page, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 },
+  sheetTitle: { fontSize: 20, fontWeight: '700', color: C.text, textAlign: 'right', marginBottom: 8 },
+  fLabel: { fontSize: 13, fontWeight: '600', color: C.text, textAlign: 'right', marginBottom: 5, marginTop: 10 },
+  fInput: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 12, padding: 12, fontSize: 15, textAlign: 'right', color: C.text },
+  btn: { backgroundColor: C.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 20 },
+  btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  cancelText: { color: C.textMuted, textAlign: 'center', fontSize: 14 },
 });
