@@ -274,8 +274,18 @@ export default function MapScreen() {
     setPoiLoading(true);
     setToast(T.loadingPlaces);
 
-    const bbox = bboxFrom(points);
-    const q = `[out:json][timeout:20];(${layer.filter}(${bbox}););out center 60;`;
+    // A single bbox spanning every listing nationwide would let one dense
+    // region (e.g. Tel Aviv) exhaust the whole result quota, leaving other
+    // cities (e.g. Haifa) with zero results even when matches exist there.
+    // Query a small box around each listing instead, unioned together, so
+    // every city with a listing gets its own guaranteed search area.
+    const AREA_HALF_SPAN = 0.06;
+    const clauses = points.length
+      ? points
+          .map((p) => `${layer.filter}(${p.lat - AREA_HALF_SPAN},${p.lng - AREA_HALF_SPAN},${p.lat + AREA_HALF_SPAN},${p.lng + AREA_HALF_SPAN});`)
+          .join('')
+      : `${layer.filter}(${bboxFrom([])});`;
+    const q = `[out:json][timeout:25];(${clauses});out center 300;`;
 
     try {
       const json = await fetchOverpass(q);
