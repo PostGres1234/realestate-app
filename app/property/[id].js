@@ -34,6 +34,13 @@ const T = {
   lNameLabel: 'שם משפחה',
   occLabel: 'עיסוק',
   occPlaceholder: 'לדוגמה: מהנדס תוכנה',
+  possessionLabel: 'מועד מסירה',
+  possessionImmediate: 'מיידי',
+  needsMortgageLabel: 'אתם זקוקים למשכנתא?',
+  hasApprovalLabel: 'יש לכם אישור עקרוני למשכנתא?',
+  hasCashLabel: 'יש לכם את מלוא הסכום מוכן לתשלום?',
+  yes: 'כן',
+  no: 'לא',
   noteLabel: 'הודעה (אופציונלי)',
   notePlaceholder: 'מתי נוח לכם לראות את הנכס?',
   messageLabel: 'תוכן ההודעה',
@@ -76,14 +83,27 @@ export default function PropertyDetail() {
   const [lName, setLName] = useState('');
   const [occupation, setOccupation] = useState('');
   const [note, setNote] = useState('');
+  const [needsMortgage, setNeedsMortgage] = useState(null);
+  const [hasApproval, setHasApproval] = useState(null);
+  const [hasCash, setHasCash] = useState(null);
   const [sending, setSending] = useState(false);
   const [customBody, setCustomBody] = useState('');
   const [bodyEdited, setBodyEdited] = useState(false);
 
+  const isSale = p?.listing_type === 'sale';
   const greeting = p ? 'שלום, מתעניין/ת בנכס: ' + (p.title ?? p.city) : '';
 
   function autoBody() {
     const lines = ['שם: ' + fName.trim() + ' ' + lName.trim(), 'עיסוק: ' + occupation.trim()];
+    if (isSale && needsMortgage !== null) {
+      lines.push(T.needsMortgageLabel + ' ' + (needsMortgage ? T.yes : T.no));
+      if (needsMortgage && hasApproval !== null) {
+        lines.push(T.hasApprovalLabel + ' ' + (hasApproval ? T.yes : T.no));
+      }
+      if (!needsMortgage && hasCash !== null) {
+        lines.push(T.hasCashLabel + ' ' + (hasCash ? T.yes : T.no));
+      }
+    }
     if (note.trim()) { lines.push(''); lines.push(note.trim()); }
     return lines.join('\n');
   }
@@ -91,7 +111,7 @@ export default function PropertyDetail() {
   useEffect(() => {
     if (!bodyEdited) setCustomBody(autoBody());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fName, lName, occupation, note, bodyEdited]);
+  }, [fName, lName, occupation, note, needsMortgage, hasApproval, hasCash, bodyEdited]);
 
   useEffect(() => {
     (async () => {
@@ -107,7 +127,9 @@ export default function PropertyDetail() {
 
       if (!user) { setMedia([]); return; }
 
-      supabase.rpc('track_view', { p_property: id });
+      supabase.rpc('track_view', { p_property: id }).then(({ error: viewErr }) => {
+        if (viewErr) logSupabase('detail.trackView', viewErr, { id });
+      });
 
       const { data: m } = await supabase
         .from('property_images')
@@ -197,6 +219,10 @@ export default function PropertyDetail() {
   if (!p) return <ActivityIndicator style={{ marginTop: 80 }} size="large" color={C.primary} />;
 
   const money = (n) => '\u20AA' + new Intl.NumberFormat('he-IL').format(n);
+  const formatPossessionDate = (iso) => {
+    const [y, m, d] = iso.split('-');
+    return d + '/' + m + '/' + y;
+  };
   const cta = user ? T.ctaUser : T.ctaGuest;
   const owned = FEATURES.filter((f) => p[f.key]);
   const isOwner = user?.id === p.seller_id;
@@ -272,6 +298,18 @@ export default function PropertyDetail() {
             <Text style={s.title}>{p.title}</Text>
             {p.address ? <Text style={s.meta}>{p.address}</Text> : null}
             <Text style={s.specs}>{specs}</Text>
+
+            {p.possession_date !== undefined ? (
+              <View style={s.possessionRow}>
+                <Ionicons name="calendar-outline" size={15} color={C.primary} />
+                <Text style={s.possessionText}>
+                  {T.possessionLabel + ': ' + (p.possession_date
+                    ? formatPossessionDate(p.possession_date)
+                    : T.possessionImmediate)}
+                </Text>
+              </View>
+            ) : null}
+
             {p.description ? <Text style={s.desc}>{p.description}</Text> : null}
 
             {owned.length ? (
@@ -329,6 +367,66 @@ export default function PropertyDetail() {
               <Text style={s.fLabel}>{T.occLabel}</Text>
               <TextInput style={s.fInput} placeholder={T.occPlaceholder}
                 placeholderTextColor="#A9B0BF" value={occupation} onChangeText={setOccupation} />
+
+              {isSale ? (
+                <>
+                  <Text style={s.fLabel}>{T.needsMortgageLabel}</Text>
+                  <View style={s.yesNoRow}>
+                    <Pressable
+                      style={[s.yesNoBtn, needsMortgage === true && s.yesNoBtnOn]}
+                      onPress={() => setNeedsMortgage(true)}
+                    >
+                      <Text style={needsMortgage === true ? s.yesNoTextOn : s.yesNoText}>{T.yes}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[s.yesNoBtn, needsMortgage === false && s.yesNoBtnOn]}
+                      onPress={() => setNeedsMortgage(false)}
+                    >
+                      <Text style={needsMortgage === false ? s.yesNoTextOn : s.yesNoText}>{T.no}</Text>
+                    </Pressable>
+                  </View>
+
+                  {needsMortgage === true ? (
+                    <>
+                      <Text style={s.fLabel}>{T.hasApprovalLabel}</Text>
+                      <View style={s.yesNoRow}>
+                        <Pressable
+                          style={[s.yesNoBtn, hasApproval === true && s.yesNoBtnOn]}
+                          onPress={() => setHasApproval(true)}
+                        >
+                          <Text style={hasApproval === true ? s.yesNoTextOn : s.yesNoText}>{T.yes}</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[s.yesNoBtn, hasApproval === false && s.yesNoBtnOn]}
+                          onPress={() => setHasApproval(false)}
+                        >
+                          <Text style={hasApproval === false ? s.yesNoTextOn : s.yesNoText}>{T.no}</Text>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : null}
+
+                  {needsMortgage === false ? (
+                    <>
+                      <Text style={s.fLabel}>{T.hasCashLabel}</Text>
+                      <View style={s.yesNoRow}>
+                        <Pressable
+                          style={[s.yesNoBtn, hasCash === true && s.yesNoBtnOn]}
+                          onPress={() => setHasCash(true)}
+                        >
+                          <Text style={hasCash === true ? s.yesNoTextOn : s.yesNoText}>{T.yes}</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[s.yesNoBtn, hasCash === false && s.yesNoBtnOn]}
+                          onPress={() => setHasCash(false)}
+                        >
+                          <Text style={hasCash === false ? s.yesNoTextOn : s.yesNoText}>{T.no}</Text>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
 
               <Text style={s.fLabel}>{T.noteLabel}</Text>
               <TextInput style={[s.fInput, { minHeight: 80, textAlignVertical: 'top' }]}
@@ -404,6 +502,8 @@ const s = StyleSheet.create({
   title: { fontSize: 17, fontWeight: '700', color: C.text, textAlign: 'right' },
   meta: { color: C.textMuted, fontSize: 14, textAlign: 'right' },
   specs: { color: C.textSecondary, fontSize: 14, textAlign: 'right' },
+  possessionRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
+  possessionText: { color: C.textSecondary, fontSize: 14 },
   desc: { fontSize: 15, lineHeight: 24, color: C.textSecondary, textAlign: 'right', marginTop: 4 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: C.text, textAlign: 'right', marginBottom: 8 },
   featWrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
@@ -421,6 +521,11 @@ const s = StyleSheet.create({
   sheetHint: { fontSize: 12, color: C.textMuted, textAlign: 'right', marginTop: 4, marginBottom: 8 },
   fLabel: { fontSize: 13, fontWeight: '600', color: C.text, textAlign: 'right', marginBottom: 5, marginTop: 10 },
   fInput: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 12, padding: 12, fontSize: 15, textAlign: 'right', color: C.text },
+  yesNoRow: { flexDirection: 'row-reverse', gap: 8 },
+  yesNoBtn: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
+  yesNoBtnOn: { backgroundColor: C.primary, borderColor: C.primary },
+  yesNoText: { color: C.textSecondary, fontSize: 14, fontWeight: '600' },
+  yesNoTextOn: { color: '#fff', fontSize: 14, fontWeight: '600' },
   cancelText: { color: C.textMuted, textAlign: 'center', fontSize: 14 },
   hintText: { fontSize: 12, color: C.textMuted, textAlign: 'right', marginBottom: 6 },
   lockedLine: { backgroundColor: C.border, borderRadius: 12, padding: 12, marginBottom: 8 },

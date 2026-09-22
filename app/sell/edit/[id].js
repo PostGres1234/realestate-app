@@ -28,6 +28,15 @@ const T = {
   statusLabel: 'סטטוס',
   descLabel: 'תיאור',
   descPlaceholder: 'ספרו על הנכס...',
+  possessionLabel: 'מועד מסירה',
+  possessionHint: 'כך קונים ושוכרים ידעו אם התזמון מתאים להם.',
+  possessionImmediate: 'מיידי',
+  possessionFuture: 'תאריך עתידי',
+  day: 'יום',
+  month: 'חודש',
+  year: 'שנה',
+  missingPossession: 'יש למלא יום, חודש ושנה למועד המסירה.',
+  badPossessionDate: 'תאריך מועד המסירה אינו תקין.',
   save: 'שמירת שינויים',
   busy: 'שומר...',
   uploading: 'מעלה קבצים...',
@@ -78,8 +87,36 @@ export default function EditListing() {
   const [type, setType] = useState('apartment');
   const [status, setStatus] = useState('active');
   const [description, setDescription] = useState('');
+  const [possessionMode, setPossessionMode] = useState('immediate');
+  const [pDay, setPDay] = useState('');
+  const [pMonth, setPMonth] = useState('');
+  const [pYear, setPYear] = useState('');
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState('');
+
+  function resolvePossessionDate() {
+    if (possessionMode === 'immediate') return { ok: true, value: null };
+
+    if (!pDay.trim() || !pMonth.trim() || !pYear.trim()) {
+      return { ok: false, error: T.missingPossession };
+    }
+
+    const d = parseInt(pDay, 10);
+    const m = parseInt(pMonth, 10);
+    const y = parseInt(pYear, 10);
+
+    if (isNaN(d) || d < 1 || d > 31 || isNaN(m) || m < 1 || m > 12 || isNaN(y) || y < 1900) {
+      return { ok: false, error: T.badPossessionDate };
+    }
+
+    const date = new Date(y, m - 1, d);
+    if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) {
+      return { ok: false, error: T.badPossessionDate };
+    }
+
+    const iso = y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    return { ok: true, value: iso };
+  }
 
   useEffect(() => {
     (async () => {
@@ -105,6 +142,14 @@ export default function EditListing() {
       setType(data.property_type ?? 'apartment');
       setStatus(data.status ?? 'active');
       setDescription(data.description ?? '');
+
+      if (data.possession_date) {
+        const [y, m, d] = data.possession_date.split('-');
+        setPossessionMode('future');
+        setPDay(String(Number(d)));
+        setPMonth(String(Number(m)));
+        setPYear(y);
+      }
 
       const { data: m } = await supabase
         .from('property_images')
@@ -221,6 +266,10 @@ export default function EditListing() {
     if (!title.trim() || !price || !city.trim()) {
       return Alert.alert(T.missingTitle, T.missingBody);
     }
+
+    const possession = resolvePossessionDate();
+    if (!possession.ok) return Alert.alert(T.missingTitle, possession.error);
+
     setBusy(true);
     setStage(T.busy);
 
@@ -236,6 +285,7 @@ export default function EditListing() {
         bathrooms: bathrooms ? Number(bathrooms) : null,
         area_sqm: area ? Number(area) : null,
         property_type: type,
+        possession_date: possession.value,
         status,
       })
       .eq('id', id);
@@ -318,6 +368,39 @@ export default function EditListing() {
             </Pressable>
           ))}
         </View>
+      </View>
+
+      <View style={s.field}>
+        <Text style={s.label}>{T.possessionLabel}</Text>
+        <View style={s.chips}>
+          <Pressable style={[s.chip, possessionMode === 'immediate' && s.chipOn]}
+            onPress={() => setPossessionMode('immediate')}>
+            <Text style={possessionMode === 'immediate' ? s.chipTextOn : s.chipText}>
+              {T.possessionImmediate}
+            </Text>
+          </Pressable>
+          <Pressable style={[s.chip, possessionMode === 'future' && s.chipOn]}
+            onPress={() => setPossessionMode('future')}>
+            <Text style={possessionMode === 'future' ? s.chipTextOn : s.chipText}>
+              {T.possessionFuture}
+            </Text>
+          </Pressable>
+        </View>
+        <Text style={s.hint}>{T.possessionHint}</Text>
+
+        {possessionMode === 'future' ? (
+          <View style={s.dobRow}>
+            <TextInput style={[s.input, s.dobPart]} placeholder={T.day}
+              placeholderTextColor="#A9B0BF" keyboardType="number-pad" maxLength={2}
+              value={pDay} onChangeText={setPDay} />
+            <TextInput style={[s.input, s.dobPart]} placeholder={T.month}
+              placeholderTextColor="#A9B0BF" keyboardType="number-pad" maxLength={2}
+              value={pMonth} onChangeText={setPMonth} />
+            <TextInput style={[s.input, s.dobYear]} placeholder={T.year}
+              placeholderTextColor="#A9B0BF" keyboardType="number-pad" maxLength={4}
+              value={pYear} onChangeText={setPYear} />
+          </View>
+        ) : null}
       </View>
 
       <View style={s.field}>
@@ -450,6 +533,9 @@ const s = StyleSheet.create({
   chipOn: { backgroundColor: C.primary, borderColor: C.primary },
   chipText: { color: C.textSecondary, fontSize: 14 },
   chipTextOn: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  dobRow: { flexDirection: 'row-reverse', gap: 10, marginTop: 10 },
+  dobPart: { flex: 1, textAlign: 'center' },
+  dobYear: { flex: 1.6, textAlign: 'center' },
   btn: { backgroundColor: C.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 8 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
 });

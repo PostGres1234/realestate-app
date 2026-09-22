@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet, PanResponder } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -17,7 +17,105 @@ const T = {
   loadingPlaces: 'טוען מקומות...',
   noneFound: 'לא נמצאו מקומות באזור',
   noName: 'ללא שם',
+  radiusLabel: 'טווח מהבית',
+  km: 'ק"מ',
 };
+
+const MIN_RADIUS_KM = 1;
+const MAX_RADIUS_KM = 20;
+const DEFAULT_RADIUS_KM = 3;
+const KM_TO_DEG = 1 / 111; // rough conversion, consistent with the rest of this screen
+
+const THUMB_SIZE = 22;
+
+function RadiusSlider({ value, onChange, disabled }) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const [dragValue, setDragValue] = useState(value);
+  const draggingRef = useRef(false);
+  const startValueRef = useRef(value);
+  // PanResponder.create runs once (memoized in a ref below), so its
+  // callbacks close over stale state - track the live value in a ref
+  // instead of reading `dragValue` directly inside those callbacks.
+  const dragValueRef = useRef(value);
+  const trackWidthRef = useRef(0);
+  const disabledRef = useRef(disabled);
+  // changeRadius is a fresh closure every MapScreen render (it reads
+  // current active/points/radiusKm) - forward through a ref so the
+  // once-created PanResponder always calls the latest version.
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    if (!draggingRef.current) {
+      setDragValue(value);
+      dragValueRef.current = value;
+    }
+  }, [value]);
+
+  useEffect(() => {
+    disabledRef.current = disabled;
+  }, [disabled]);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  function updateDrag(v) {
+    dragValueRef.current = v;
+    setDragValue(v);
+  }
+
+  // PanResponder must be created once and reused; ref-forwarding (not
+  // stale reads) keeps its callbacks in sync with the latest state.
+  const pan = useRef(
+    // eslint-disable-next-line react-hooks/refs
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !disabledRef.current,
+      onMoveShouldSetPanResponder: () => !disabledRef.current,
+      onPanResponderGrant: () => {
+        draggingRef.current = true;
+        startValueRef.current = dragValueRef.current;
+      },
+      onPanResponderMove: (_e, gesture) => {
+        if (!trackWidthRef.current) return;
+        const startRatio = (startValueRef.current - MIN_RADIUS_KM) / (MAX_RADIUS_KM - MIN_RADIUS_KM);
+        const deltaRatio = gesture.dx / trackWidthRef.current;
+        const ratio = Math.max(0, Math.min(1, startRatio + deltaRatio));
+        updateDrag(Math.round(MIN_RADIUS_KM + ratio * (MAX_RADIUS_KM - MIN_RADIUS_KM)));
+      },
+      onPanResponderRelease: () => {
+        draggingRef.current = false;
+        onChangeRef.current(dragValueRef.current);
+      },
+    })
+  ).current;
+
+  const ratio = (dragValue - MIN_RADIUS_KM) / (MAX_RADIUS_KM - MIN_RADIUS_KM);
+  const thumbCenter = ratio * trackWidth;
+
+  return (
+    <View style={{ flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: 10 }}>
+      <Text style={s.radiusValue}>{dragValue} {T.km}</Text>
+      <View
+        style={s.sliderTrack}
+        onLayout={(e) => {
+          trackWidthRef.current = e.nativeEvent.layout.width;
+          setTrackWidth(e.nativeEvent.layout.width);
+        }}
+        // eslint-disable-next-line react-hooks/refs -- see note above
+        {...pan.panHandlers}
+      >
+        <View style={s.sliderLine} />
+        <View style={[s.sliderFill, { width: thumbCenter }]} />
+        <View
+          style={[
+            s.sliderThumb,
+            { left: Math.max(0, Math.min(trackWidth - THUMB_SIZE, thumbCenter - THUMB_SIZE / 2)) },
+          ]}
+        />
+      </View>
+    </View>
+  );
+}
 
 const LAYERS = [
   {
@@ -190,6 +288,7 @@ export default function MapScreen() {
   const [poiLoading, setPoiLoading] = useState(false);
   const [toast, setToast] = useState('');
   const [mode, setMode] = useState('all');
+  const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -261,6 +360,34 @@ export default function MapScreen() {
     return Promise.any(attempts);
   }
 
+  // A single bbox spanning every listing nationwide would let one dense
+  // region (e.g. Tel Aviv) exhaust the whole result quota, leaving other
+  // cities (e.g. Haifa) with zero results even when matches exist there.
+  // Query a small box around each listing instead, unioned together, so
+  // every city with a listing gets its own guaranteed search area.
+  async function fetchLayerPlaces(layer, km) {
+    const half = km * KM_TO_DEG;
+    const clauses = points.length
+      ? points
+          .map((p) => `${layer.filter}(${p.lat - half},${p.lng - half},${p.lat + half},${p.lng + half});`)
+          .join('')
+      : `${layer.filter}(${bboxFrom([])});`;
+    const q = `[out:json][timeout:25];(${clauses});out center 300;`;
+
+    const json = await fetchOverpass(q);
+    return (json.elements ?? [])
+      .map((el) => ({
+        key: layer.key,
+        label: layer.label,
+        color: layer.color,
+        emoji: layer.emoji,
+        name: el.tags?.['name:he'] ?? el.tags?.name ?? T.noName,
+        lat: el.lat ?? el.center?.lat,
+        lng: el.lon ?? el.center?.lon,
+      }))
+      .filter((x) => x.lat && x.lng);
+  }
+
   async function toggleLayer(layer) {
     const on = !!active[layer.key];
 
@@ -274,39 +401,37 @@ export default function MapScreen() {
     setPoiLoading(true);
     setToast(T.loadingPlaces);
 
-    // A single bbox spanning every listing nationwide would let one dense
-    // region (e.g. Tel Aviv) exhaust the whole result quota, leaving other
-    // cities (e.g. Haifa) with zero results even when matches exist there.
-    // Query a small box around each listing instead, unioned together, so
-    // every city with a listing gets its own guaranteed search area.
-    const AREA_HALF_SPAN = 0.06;
-    const clauses = points.length
-      ? points
-          .map((p) => `${layer.filter}(${p.lat - AREA_HALF_SPAN},${p.lng - AREA_HALF_SPAN},${p.lat + AREA_HALF_SPAN},${p.lng + AREA_HALF_SPAN});`)
-          .join('')
-      : `${layer.filter}(${bboxFrom([])});`;
-    const q = `[out:json][timeout:25];(${clauses});out center 300;`;
-
     try {
-      const json = await fetchOverpass(q);
-
-      const found = (json.elements ?? [])
-        .map((el) => ({
-          key: layer.key,
-          label: layer.label,
-          color: layer.color,
-          emoji: layer.emoji,
-          name: el.tags?.['name:he'] ?? el.tags?.name ?? T.noName,
-          lat: el.lat ?? el.center?.lat,
-          lng: el.lon ?? el.center?.lon,
-        }))
-        .filter((x) => x.lat && x.lng);
-
+      const found = await fetchLayerPlaces(layer, radiusKm);
       setPlaces((p) => [...p.filter((x) => x.key !== layer.key), ...found]);
       setToast('');
     } catch (err) {
       logSupabase('map.overpass', { message: String(err) }, { layer: layer.key });
       setActive((a) => ({ ...a, [layer.key]: false }));
+      setToast(T.noneFound);
+      setTimeout(() => setToast(''), 2500);
+    }
+
+    setPoiLoading(false);
+  }
+
+  async function changeRadius(km) {
+    if (km === radiusKm) return;
+    setRadiusKm(km);
+
+    const activeLayers = LAYERS.filter((l) => active[l.key]);
+    if (!activeLayers.length) return;
+
+    setPoiLoading(true);
+    setToast(T.loadingPlaces);
+
+    try {
+      const results = await Promise.all(activeLayers.map((l) => fetchLayerPlaces(l, km)));
+      const activeKeys = new Set(activeLayers.map((l) => l.key));
+      setPlaces((p) => [...p.filter((x) => !activeKeys.has(x.key)), ...results.flat()]);
+      setToast('');
+    } catch (err) {
+      logSupabase('map.overpass', { message: String(err) }, { radiusKm: km });
       setToast(T.noneFound);
       setTimeout(() => setToast(''), 2500);
     }
@@ -362,6 +487,11 @@ export default function MapScreen() {
             );
           })}
         </ScrollView>
+
+        <View style={s.radiusRow}>
+          <Text style={s.radiusLabel}>{T.radiusLabel}</Text>
+          <RadiusSlider value={radiusKm} onChange={changeRadius} disabled={loading} />
+        </View>
       </View>
 
       <View style={{ flex: 1 }}>
@@ -410,6 +540,17 @@ const s = StyleSheet.create({
   },
   pillText: { fontSize: 14, fontWeight: '600', color: C.textSecondary },
   pillTextOn: { color: '#fff' },
+  radiusRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 14 },
+  radiusLabel: { fontSize: 12, color: C.textMuted, fontWeight: '600' },
+  radiusValue: { fontSize: 12, color: C.primary, fontWeight: '700', minWidth: 44, textAlign: 'center' },
+  sliderTrack: { flex: 1, height: THUMB_SIZE, justifyContent: 'center' },
+  sliderLine: { position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: C.border },
+  sliderFill: { position: 'absolute', left: 0, height: 4, borderRadius: 2, backgroundColor: C.primary },
+  sliderThumb: {
+    position: 'absolute', width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: THUMB_SIZE / 2,
+    backgroundColor: C.primary, borderWidth: 3, borderColor: '#fff',
+    shadowColor: '#1A1D26', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3,
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   toast: {
     position: 'absolute', bottom: 24, alignSelf: 'center',

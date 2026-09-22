@@ -43,6 +43,15 @@ const T = {
   featuresHint: 'סמנו את כל מה שרלוונטי',
   descLabel: 'תיאור',
   descPlaceholder: 'ספרו על הנכס: מצב, שיפוצים, נוף, חניה...',
+  possessionLabel: 'מועד מסירה',
+  possessionHint: 'כך קונים ושוכרים ידעו אם התזמון מתאים להם.',
+  possessionImmediate: 'מיידי',
+  possessionFuture: 'תאריך עתידי',
+  day: 'יום',
+  month: 'חודש',
+  year: 'שנה',
+  missingPossession: 'יש למלא יום, חודש ושנה למועד המסירה.',
+  badPossessionDate: 'תאריך מועד המסירה אינו תקין.',
   submit: 'פרסום הנכס',
   busy: 'מפרסם...',
   locating: 'מאתר את הכתובת...',
@@ -102,8 +111,36 @@ export default function NewListing() {
   const [type, setType] = useState('apartment');
   const [feats, setFeats] = useState({});
   const [description, setDescription] = useState('');
+  const [possessionMode, setPossessionMode] = useState('immediate');
+  const [pDay, setPDay] = useState('');
+  const [pMonth, setPMonth] = useState('');
+  const [pYear, setPYear] = useState('');
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState('');
+
+  function resolvePossessionDate() {
+    if (possessionMode === 'immediate') return { ok: true, value: null };
+
+    if (!pDay.trim() || !pMonth.trim() || !pYear.trim()) {
+      return { ok: false, error: T.missingPossession };
+    }
+
+    const d = parseInt(pDay, 10);
+    const m = parseInt(pMonth, 10);
+    const y = parseInt(pYear, 10);
+
+    if (isNaN(d) || d < 1 || d > 31 || isNaN(m) || m < 1 || m > 12 || isNaN(y) || y < 1900) {
+      return { ok: false, error: T.badPossessionDate };
+    }
+
+    const date = new Date(y, m - 1, d);
+    if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) {
+      return { ok: false, error: T.badPossessionDate };
+    }
+
+    const iso = y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    return { ok: true, value: iso };
+  }
 
   async function fileSizeMB(uri) {
     try {
@@ -226,6 +263,9 @@ export default function NewListing() {
       return Alert.alert(T.missingTitle, T.missingBody);
     }
 
+    const possession = resolvePossessionDate();
+    if (!possession.ok) return Alert.alert(T.missingTitle, possession.error);
+
     const { data: usedMb } = await supabase.rpc('my_storage_mb');
     if ((usedMb ?? 0) > MAX_USER_MB) {
       return Alert.alert(T.quotaTitle, T.quotaBody);
@@ -264,6 +304,7 @@ export default function NewListing() {
         has_parking: !!feats.has_parking,
         has_elevator: !!feats.has_elevator,
         has_yard: !!feats.has_yard,
+        possession_date: possession.value,
         status: 'active',
       })
       .select('id')
@@ -408,6 +449,43 @@ export default function NewListing() {
         </View>
 
         <View style={s.field}>
+          <Text style={s.label}>{T.possessionLabel}</Text>
+          <View style={s.segment}>
+            <Pressable
+              style={[s.segBtn, possessionMode === 'immediate' && s.segOn]}
+              onPress={() => setPossessionMode('immediate')}
+            >
+              <Text style={possessionMode === 'immediate' ? s.segTextOn : s.segText}>
+                {T.possessionImmediate}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[s.segBtn, possessionMode === 'future' && s.segOn]}
+              onPress={() => setPossessionMode('future')}
+            >
+              <Text style={possessionMode === 'future' ? s.segTextOn : s.segText}>
+                {T.possessionFuture}
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={s.hint}>{T.possessionHint}</Text>
+
+          {possessionMode === 'future' ? (
+            <View style={s.dobRow}>
+              <TextInput style={[s.input, s.dobPart]} placeholder={T.day}
+                placeholderTextColor="#A9B0BF" keyboardType="number-pad" maxLength={2}
+                value={pDay} onChangeText={setPDay} />
+              <TextInput style={[s.input, s.dobPart]} placeholder={T.month}
+                placeholderTextColor="#A9B0BF" keyboardType="number-pad" maxLength={2}
+                value={pMonth} onChangeText={setPMonth} />
+              <TextInput style={[s.input, s.dobYear]} placeholder={T.year}
+                placeholderTextColor="#A9B0BF" keyboardType="number-pad" maxLength={4}
+                value={pYear} onChangeText={setPYear} />
+            </View>
+          ) : null}
+        </View>
+
+        <View style={s.field}>
           <Text style={s.label}>{T.descLabel}</Text>
           <TextInput
             style={s.textarea}
@@ -491,6 +569,9 @@ const s = StyleSheet.create({
   segOn: { backgroundColor: C.primary },
   segText: { color: C.textSecondary, fontSize: 14, fontWeight: '600' },
   segTextOn: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  dobRow: { flexDirection: 'row-reverse', gap: 10, marginTop: 10 },
+  dobPart: { flex: 1, textAlign: 'center' },
+  dobYear: { flex: 1.6, textAlign: 'center' },
   photoBtn: { borderWidth: 1, borderColor: C.primary, borderStyle: 'dashed', borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
   photoBtnText: { color: C.primary, fontWeight: '600', fontSize: 15 },
   thumbWrap: { position: 'relative' },

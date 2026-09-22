@@ -7,7 +7,7 @@ import { C } from '../lib/theme';
 const T = {
   home: 'בית',
   assistant: 'ג׳ימי',
-  add: 'הוספה',
+  add: 'פרסום נכס',
   messages: 'הודעות',
   profile: 'פרופיל',
   needLoginTitle: 'נדרשת התחברות',
@@ -51,6 +51,7 @@ export default function TabBar({ active, unread = 0 }) {
     <View style={s.bar}>
       {tabs.map((t) => {
         const on = active === t.key;
+        const isAdd = t.key === 'add';
         return (
           <Pressable
             key={t.key}
@@ -58,11 +59,11 @@ export default function TabBar({ active, unread = 0 }) {
             onPress={() => go(t)}
             android_ripple={{ color: 'rgba(31,111,235,0.1)', borderless: true, radius: 34 }}
           >
-            <View>
+            <View style={isAdd && s.addCircle}>
               <Ionicons
                 name={on ? t.icon : (t.icon + '-outline')}
-                size={22}
-                color={on ? C.primary : C.textMuted}
+                size={isAdd ? 26 : 22}
+                color={isAdd ? '#fff' : (on ? C.primary : C.textMuted)}
               />
               {t.badge > 0 ? (
                 <View style={s.badge}>
@@ -70,7 +71,7 @@ export default function TabBar({ active, unread = 0 }) {
                 </View>
               ) : null}
             </View>
-            <Text style={[s.label, on && s.labelOn]}>{t.label}</Text>
+            <Text style={[s.label, on && s.labelOn, isAdd && s.addLabel]}>{t.label}</Text>
           </Pressable>
         );
       })}
@@ -90,6 +91,11 @@ const s = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', gap: 3, paddingVertical: 2 },
   label: { fontSize: 10, color: C.textMuted },
   labelOn: { color: C.primary, fontWeight: '700' },
+  addCircle: {
+    width: 38, height: 38, borderRadius: 19, backgroundColor: C.primary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  addLabel: { color: C.primary, fontWeight: '700' },
   badge: {
     position: 'absolute', top: -4, left: -10,
     backgroundColor: C.danger, minWidth: 16, height: 16,
