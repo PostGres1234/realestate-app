@@ -5,7 +5,8 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
-import { logSupabase, friendlyError } from '../../lib/logger';
+import { logSupabase } from '../../lib/logger';
+import { api } from '../../lib/api';
 import { C } from '../../lib/theme';
 import BackBar from '../../components/BackBar';
 import ReportSheet from '../../components/ReportSheet';
@@ -172,36 +173,22 @@ export default function PropertyDetail() {
     }
     setSending(true);
 
-    const { data: conv, error } = await supabase
-      .from('conversations')
-      .insert({ property_id: p.id, buyer_id: user.id, seller_id: p.seller_id })
-      .select('id')
-      .single();
-
-    if (error) {
+    let result;
+    try {
+      result = await api.post('/api/contact', {
+        propertyId: p.id,
+        body: greeting + '\n' + customBody.trim(),
+        occupation,
+      });
+    } catch (err) {
       setSending(false);
-      logSupabase('detail.startChat', error, { id });
-      return Alert.alert(T.error, friendlyError(error, error.message));
+      logSupabase('detail.startChat', { message: String(err) }, { id });
+      return Alert.alert(T.error, err.message);
     }
-
-    const body = greeting + '\n' + customBody.trim();
-
-    const { error: msgErr } = await supabase.from('messages').insert({
-      conversation_id: conv.id,
-      sender_id: user.id,
-      body,
-    });
-    if (msgErr) logSupabase('detail.introMessage', msgErr);
-
-    await supabase.from('conversations')
-      .update({ intro_sent: true }).eq('id', conv.id);
-
-    await supabase.from('profiles')
-      .update({ occupation: occupation.trim() }).eq('id', user.id);
 
     setSending(false);
     setIntroOpen(false);
-    router.push('/chat/' + conv.id);
+    router.push('/chat/' + result.conversationId);
   }
 
   if (err) {

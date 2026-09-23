@@ -7,6 +7,7 @@ import TabBar from '../components/TabBar';
 import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { C } from '../lib/theme';
 
 const T = {
@@ -102,22 +103,11 @@ export default function Assistant() {
     setBusy(true);
 
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const url = process.env.EXPO_PUBLIC_SUPABASE_URL + '/functions/v1/clever-worker';
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer ' + sess?.session?.access_token,
-        },
-        body: JSON.stringify({
-          messages: next.map((m) => ({ role: m.role, content: m.content })),
-          listings: listings.slice(0, 40),
-        }),
+      const out = await api.post('/api/jimmy/chat', {
+        messages: next.map((m) => ({ role: m.role, content: m.content })),
+        listings: listings.slice(0, 40),
       });
 
-      const out = await res.json();
       setMessages([...next, {
         role: 'assistant',
         content: out.text || T.error,
