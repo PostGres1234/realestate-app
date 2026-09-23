@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../lib/auth';
 import { logSupabase } from '../../../lib/logger';
+import { api } from '../../../lib/api';
 import { C } from '../../../lib/theme';
 
 const T = {
@@ -273,9 +274,8 @@ export default function EditListing() {
     setBusy(true);
     setStage(T.busy);
 
-    const { error } = await supabase
-      .from('properties')
-      .update({
+    try {
+      await api.patch('/api/listings/' + id, {
         title: title.trim(),
         description: description.trim() || null,
         price: Number(price),
@@ -287,13 +287,11 @@ export default function EditListing() {
         property_type: type,
         possession_date: possession.value,
         status,
-      })
-      .eq('id', id);
-
-    if (error) {
+      });
+    } catch (err) {
       setBusy(false);
-      console.log('update error', error.message);
-      return Alert.alert(T.failTitle, error.message);
+      console.log('update error', err.message);
+      return Alert.alert(T.failTitle, err.message);
     }
 
     if (newPhotos.length || newVideo) {
