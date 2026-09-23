@@ -6,7 +6,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { getDraft, saveDraft, clearDraft, markSeen } from '../../lib/inbox';
 import { placeCall, canCall, getBuyerContact } from '../../lib/calls';
-import { logSupabase, friendlyError } from '../../lib/logger';
+import { logSupabase } from '../../lib/logger';
+import { api } from '../../lib/api';
 import { C } from '../../lib/theme';
 import ReportSheet from '../../components/ReportSheet';
 
@@ -185,17 +186,13 @@ export default function Chat() {
     setText('');
     await clearDraft(id);
 
-    const { error } = await supabase.from('messages').insert({
-      conversation_id: id,
-      sender_id: user.id,
-      body,
-    });
-
-    if (error) {
-      logSupabase('chat.send', error, { conversationId: id });
+    try {
+      await api.post('/api/messages', { conversationId: id, body });
+    } catch (err) {
+      logSupabase('chat.send', { message: err.message }, { conversationId: id });
       setText(body);
       saveDraft(id, body);
-      Alert.alert(T.sendFail, friendlyError(error, error.message));
+      Alert.alert(T.sendFail, err.message);
     }
   }
 
@@ -220,15 +217,11 @@ export default function Chat() {
     if (!trimmed) return;
     if (trimmed === item.body) return cancelEdit();
 
-    const { error } = await supabase
-      .from('messages')
-      .update({ body: trimmed })
-      .eq('id', item.id)
-      .eq('sender_id', user.id);
-
-    if (error) {
-      logSupabase('chat.editMessage', error, { messageId: item.id });
-      Alert.alert(T.editFail, friendlyError(error, error.message));
+    try {
+      await api.patch('/api/messages/' + item.id, { body: trimmed });
+    } catch (err) {
+      logSupabase('chat.editMessage', { message: err.message }, { messageId: item.id });
+      Alert.alert(T.editFail, err.message);
       return;
     }
 
@@ -241,15 +234,11 @@ export default function Chat() {
 
     const body = buildIntroBody(introEdit);
 
-    const { error } = await supabase
-      .from('messages')
-      .update({ body })
-      .eq('id', introEdit.id)
-      .eq('sender_id', user.id);
-
-    if (error) {
-      logSupabase('chat.editMessage', error, { messageId: introEdit.id });
-      Alert.alert(T.editFail, friendlyError(error, error.message));
+    try {
+      await api.patch('/api/messages/' + introEdit.id, { body });
+    } catch (err) {
+      logSupabase('chat.editMessage', { message: err.message }, { messageId: introEdit.id });
+      Alert.alert(T.editFail, err.message);
       return;
     }
 
