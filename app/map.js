@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
 import { C } from '../lib/theme';
 import BackBar from '../components/BackBar';
@@ -19,6 +20,8 @@ const T = {
   noName: 'ללא שם',
   radiusLabel: 'טווח מהבית',
   km: 'ק"מ',
+  guest: 'התחברו כדי לצפות במפה',
+  login: 'התחברות',
 };
 
 const MIN_RADIUS_KM = 1;
@@ -281,6 +284,7 @@ function buildHtml(points, places) {
 }
 
 export default function MapScreen() {
+  const { user } = useAuth();
   const [points, setPoints] = useState([]);
   const [places, setPlaces] = useState([]);
   const [active, setActive] = useState({});
@@ -291,6 +295,7 @@ export default function MapScreen() {
   const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM);
 
   const load = useCallback(async () => {
+    if (!user) { setLoading(false); return; }
     setLoading(true);
     const { data, error } = await supabase.rpc('map_properties', { p_deal: mode });
     if (error) logSupabase('map.load', error, { mode });
@@ -306,7 +311,7 @@ export default function MapScreen() {
       meta: (p.bedrooms ?? '-') + ' חדרים · ' + (p.area_sqm ?? '-') + ' מ"ר',
     })));
     setLoading(false);
-  }, [mode]);
+  }, [mode, user]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -439,6 +444,21 @@ export default function MapScreen() {
     setPoiLoading(false);
   }
 
+  if (!user) {
+    return (
+      <View style={s.wrap}>
+        <BackBar title={T.heading} />
+        <View style={s.center}>
+          <Ionicons name="map-outline" size={54} color={C.textMuted} />
+          <Text style={s.muted}>{T.guest}</Text>
+          <Pressable style={s.btn} onPress={() => router.push('/subscribe')}>
+            <Text style={s.btnText}>{T.login}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={s.wrap}>
       <BackBar
@@ -551,7 +571,10 @@ const s = StyleSheet.create({
     backgroundColor: C.primary, borderWidth: 3, borderColor: '#fff',
     shadowColor: '#1A1D26', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3,
   },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18, paddingHorizontal: 30 },
+  muted: { color: C.textMuted, fontSize: 15, textAlign: 'center' },
+  btn: { backgroundColor: C.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 },
+  btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   toast: {
     position: 'absolute', bottom: 24, alignSelf: 'center',
     flexDirection: 'row-reverse', alignItems: 'center', gap: 8,
