@@ -9,6 +9,7 @@ const preferencesRouter = require("./routes/preferences");
 const favoritesRouter = require("./routes/favorites");
 const recentRouter = require("./routes/recent");
 const reportsRouter = require("./routes/reports");
+const profileRouter = require("./routes/profile");
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use("/api/preferences", preferencesRouter);
 app.use("/api/favorites", favoritesRouter);
 app.use("/api/recent", recentRouter);
 app.use("/api/reports", reportsRouter);
+app.use("/api/profile", profileRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Backend listening on port " + PORT));

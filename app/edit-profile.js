@@ -5,6 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
+import { api } from '../lib/api';
 import { C } from '../lib/theme';
 import BackBar from '../components/BackBar';
 
@@ -72,21 +73,19 @@ export default function EditProfile() {
     }
 
     setBusy(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        full_name: fullName.trim(),
+    try {
+      await api.patch('/api/profile', {
+        fullName: fullName.trim(),
         phone: phone.trim() || null,
         occupation: occupation.trim() || null,
-        allow_calls: allowCalls,
-      })
-      .eq('id', user.id);
-    setBusy(false);
-
-    if (error) {
-      logSupabase('profile.save', error);
-      return Alert.alert(T.failTitle, error.message);
+        allowCalls,
+      });
+    } catch (err) {
+      setBusy(false);
+      logSupabase('profile.save', { message: err.message });
+      return Alert.alert(T.failTitle, err.message);
     }
+    setBusy(false);
 
     Alert.alert(T.savedTitle, T.savedBody);
     router.back();
