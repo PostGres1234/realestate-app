@@ -216,12 +216,96 @@ async function callGemini(contents, system, attempt = 1) {
   return data;
 }
 
+// Streams the final (non-tool-call) reply straight through to the client as
+// it's generated, instead of waiting for the whole ~900-token response.
+// PROPERTIES:/OPTIONS:/MULTI: are technical marker lines the model always
+// puts at the very end - never forwarded, only the text before them is, so
+// the client never sees them flash by mid-stream.
+async function streamFinalReply(contents, system, res) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse`;
+  const upstream = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-goog-api-key": KEY,
+    },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: system }] },
+      contents,
+      tools: [{ function_declarations: TOOLS }],
+      generation_config: { max_output_tokens: 900 },
+    }),
+  });
+
+  if (!upstream.ok || !upstream.body) {
+    const errData = await upstream.json().catch(() => ({}));
+    throw new Error(errData.error?.message || `Gemini stream failed (${upstream.status})`);
+  }
+
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullText = "";
+  let sentLength = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let idx;
+    while ((idx = buffer.indexOf("\n\n")) !== -1) {
+      const rawEvent = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const line = rawEvent.replace(/^data:\s*/, "").trim();
+      if (!line) continue;
+
+      let chunk;
+      try {
+        chunk = JSON.parse(line);
+      } catch {
+        continue;
+      }
+
+      const delta = (chunk.candidates?.[0]?.content?.parts ?? [])
+        .map((p) => p.text ?? "")
+        .join("");
+      if (!delta) continue;
+
+      fullText += delta;
+
+      const markerIdx = fullText.search(/\n?(PROPERTIES:|OPTIONS:|MULTI:)/);
+      const safeEnd = markerIdx === -1 ? fullText.length : markerIdx;
+      if (safeEnd > sentLength) {
+        res.write(`data: ${JSON.stringify({ delta: fullText.slice(sentLength, safeEnd) })}\n\n`);
+        sentLength = safeEnd;
+      }
+    }
+  }
+
+  return fullText;
+}
+
 router.post("/chat", requireAuth, async (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  if (res.flushHeaders) res.flushHeaders();
+
+  const sendFinal = (payload) => {
+    res.write(`data: ${JSON.stringify({ done: true, ...payload })}\n\n`);
+    res.end();
+  };
+
   try {
     const { messages, listings, focusPropertyId } = req.body;
 
-    const context = listings?.length
-      ? `\n\nנכסים זמינים באפליקציה כרגע:\n${JSON.stringify(listings)}`
+    // `cover` is a client-added image URL never used by the model - stripping
+    // it keeps the per-turn payload smaller without losing anything Jimmy
+    // actually reasons about.
+    const trimmedListings = (listings ?? []).map(({ cover, ...rest }) => rest);
+    const context = trimmedListings.length
+      ? `\n\nנכסים זמינים באפליקציה כרגע:\n${JSON.stringify(trimmedListings)}`
       : "";
 
     const system = (focusPropertyId ? SYSTEM_FOCUS : SYSTEM) + context;
@@ -253,7 +337,16 @@ router.post("/chat", requireAuth, async (req, res) => {
       calls = functionCallParts(candidate);
     }
 
-    let text = (candidate?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
+    // Normally the tool loop above always ends with plain text (the system
+    // prompt expects it), so stream that final answer. In the rare case the
+    // model still wants another tool call after 3 rounds, just use whatever
+    // text is already there rather than looping forever.
+    let text;
+    if (calls.length) {
+      text = (candidate?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
+    } else {
+      text = (await streamFinalReply(contents, system, res)).trim();
+    }
 
     let ids = [];
     const match = text.match(/PROPERTIES:\s*(.+)$/m);
@@ -272,10 +365,10 @@ router.post("/chat", requireAuth, async (req, res) => {
     const multi = /MULTI:\s*yes/m.test(text);
     text = text.replace(/MULTI:.*$/m, "").trim();
 
-    res.json({ text, ids, options, skippable: true, multi });
+    sendFinal({ text, ids, options, skippable: true, multi });
   } catch (e) {
     console.log("jimmy chat error", String(e));
-    res.json({ text: "אירעה שגיאה. נסו שוב.", ids: [], options: [], skippable: false, multi: false });
+    sendFinal({ text: "אירעה שגיאה. נסו שוב.", ids: [], options: [], skippable: false, multi: false });
   }
 });
 
