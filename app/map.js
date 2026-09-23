@@ -173,14 +173,14 @@ const LAYERS = [
   },
 ];
 
+const GOOGLE_MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
+
 function buildHtml(points, places) {
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   html, body, #map { height: 100%; margin: 0; padding: 0;
     font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -192,7 +192,7 @@ function buildHtml(points, places) {
     border: 3px solid #fff; box-shadow: 0 4px 11px rgba(31,111,235,0.45);
     display: flex; align-items: center; justify-content: center;
   }
-  .home-pin span { transform: rotate(45deg); font-size: 16px; }
+  .home-pin span { display: block; transform: rotate(45deg); font-size: 16px; }
 
   .poi-wrap { display: flex; flex-direction: column; align-items: center; }
   .poi-pin {
@@ -210,8 +210,6 @@ function buildHtml(points, places) {
     direction: rtl;
   }
 
-  .leaflet-popup-content-wrapper { border-radius: 14px; }
-  .leaflet-popup-content { direction: rtl; text-align: right; margin: 12px 14px; }
   .p-price { font-size: 18px; font-weight: 800; color: #1f6feb; }
   .p-city { font-size: 13px; color: #1A1D26; margin-top: 3px; font-weight: 600; }
   .p-meta { font-size: 12px; color: #8A92A6; margin-top: 3px; }
@@ -222,62 +220,119 @@ function buildHtml(points, places) {
   }
   .poi-name { font-size: 14px; font-weight: 700; color: #1A1D26; }
   .poi-kind { font-size: 11px; color: #8A92A6; margin-top: 3px; }
+  .info-box { direction: rtl; text-align: right; min-width: 140px; }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <script>
-  var map = L.map('map', { zoomControl: false }).setView([31.7, 35.0], 8);
-  L.control.zoom({ position: 'topleft' }).addTo(map);
+  var map, infoWindow;
 
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap'
-  }).addTo(map);
-
-  var homeIcon = L.divIcon({
-    className: '',
-    html: '<div class="home-pin"><span>&#127968;</span></div>',
-    iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -36]
-  });
-
-  var points = ${JSON.stringify(points)};
-  var places = ${JSON.stringify(places)};
-  var markers = [];
-
-  points.forEach(function (p) {
-    var m = L.marker([p.lat, p.lng], { icon: homeIcon, zIndexOffset: 1000 }).addTo(map);
-    m.bindPopup(
-      '<div class="p-price">' + p.price + '</div>' +
-      '<div class="p-city">' + p.city + '</div>' +
-      '<div class="p-meta">' + p.meta + '</div>' +
-      '<a class="p-btn" href="#" onclick="open_(\\'' + p.id + '\\');return false;">צפייה בנכס</a>'
-    );
-    markers.push(m);
-  });
-
-  places.forEach(function (q) {
-    var icon = L.divIcon({
-      className: '',
-      html: '<div class="poi-wrap">' +
-            '<div class="poi-pin" style="background:' + q.color + '">' + q.emoji + '</div>' +
-            '<div class="poi-label">' + q.name + '</div>' +
-            '</div>',
-      iconSize: [110, 46], iconAnchor: [55, 14], popupAnchor: [0, -14]
+  function PinOverlay(position, html, anchorX, anchorY, onClick) {
+    this.position = position;
+    this.html = html;
+    this.anchorX = anchorX;
+    this.anchorY = anchorY;
+    this.onClick = onClick;
+    this.div = null;
+    this.setMap(map);
+  }
+  PinOverlay.prototype = Object.create(google.maps.OverlayView.prototype);
+  PinOverlay.prototype.onAdd = function () {
+    var div = document.createElement('div');
+    div.style.position = 'absolute';
+    div.style.cursor = 'pointer';
+    div.innerHTML = this.html;
+    var self = this;
+    div.addEventListener('click', function (e) {
+      e.stopPropagation();
+      self.onClick();
     });
-    var m = L.marker([q.lat, q.lng], { icon: icon }).addTo(map);
-    m.bindPopup(
-      '<div class="poi-name">' + q.name + '</div>' +
-      '<div class="poi-kind">' + q.label + '</div>'
-    );
-  });
+    this.div = div;
+    this.getPanes().overlayMouseTarget.appendChild(div);
+  };
+  PinOverlay.prototype.draw = function () {
+    if (!this.div) return;
+    var proj = this.getProjection();
+    if (!proj) return;
+    var pos = proj.fromLatLngToDivPixel(this.position);
+    this.div.style.left = (pos.x - this.anchorX) + 'px';
+    this.div.style.top = (pos.y - this.anchorY) + 'px';
+  };
+  PinOverlay.prototype.onRemove = function () {
+    if (this.div && this.div.parentNode) this.div.parentNode.removeChild(this.div);
+    this.div = null;
+  };
 
   function open_(id) { window.ReactNativeWebView.postMessage(id); }
 
-  if (markers.length) {
-    var group = L.featureGroup(markers);
-    map.fitBounds(group.getBounds().pad(0.25));
+  function initMap() {
+    map = new google.maps.Map(document.getElementById('map'), {
+      center: { lat: 31.7, lng: 35.0 },
+      zoom: 8,
+      disableDefaultUI: true,
+      zoomControl: true,
+      clickableIcons: false,
+    });
+    infoWindow = new google.maps.InfoWindow();
+
+    var points = ${JSON.stringify(points)};
+    var places = ${JSON.stringify(places)};
+    var bounds = new google.maps.LatLngBounds();
+    var hasPoints = false;
+
+    points.forEach(function (p) {
+      var pos = new google.maps.LatLng(p.lat, p.lng);
+      bounds.extend(pos);
+      hasPoints = true;
+
+      new PinOverlay(
+        pos,
+        '<div class="home-pin"><span>&#127968;</span></div>',
+        18, 36,
+        function () {
+          infoWindow.setContent(
+            '<div class="info-box">' +
+            '<div class="p-price">' + p.price + '</div>' +
+            '<div class="p-city">' + p.city + '</div>' +
+            '<div class="p-meta">' + p.meta + '</div>' +
+            '<a class="p-btn" href="#" onclick="open_(\\'' + p.id + '\\');return false;">צפייה בנכס</a>' +
+            '</div>'
+          );
+          infoWindow.setPosition(pos);
+          infoWindow.open(map);
+        }
+      );
+    });
+
+    places.forEach(function (q) {
+      var pos = new google.maps.LatLng(q.lat, q.lng);
+
+      new PinOverlay(
+        pos,
+        '<div class="poi-wrap">' +
+          '<div class="poi-pin" style="background:' + q.color + '">' + q.emoji + '</div>' +
+          '<div class="poi-label">' + q.name + '</div>' +
+          '</div>',
+        55, 14,
+        function () {
+          infoWindow.setContent(
+            '<div class="info-box">' +
+            '<div class="poi-name">' + q.name + '</div>' +
+            '<div class="poi-kind">' + q.label + '</div>' +
+            '</div>'
+          );
+          infoWindow.setPosition(pos);
+          infoWindow.open(map);
+        }
+      );
+    });
+
+    if (hasPoints) map.fitBounds(bounds, 60);
   }
+</script>
+<script async defer
+  src="https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&callback=initMap">
 </script>
 </body>
 </html>`;
