@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { C } from '../../lib/theme';
 
 const T = {
-  title: 'ברוכים השבים',
+  title: 'ברוכים הבאים',
   subtitle: 'התחברו לחשבון שלכם',
   emailLabel: 'אימייל',
   emailPlaceholder: 'name@gmail.com',
