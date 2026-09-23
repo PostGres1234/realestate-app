@@ -6,6 +6,7 @@ import BackBar from '../components/BackBar';
 import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { C } from '../lib/theme';
 
 const T = {
@@ -68,9 +69,11 @@ export default function Saved() {
 
   async function remove(id) {
     setItems((p) => p.filter((x) => x.id !== id));
-    const { error } = await supabase.from('favorites').delete()
-      .eq('user_id', user.id).eq('property_id', id);
-    if (error) logSupabase('saved.remove', error);
+    try {
+      await api.del('/api/favorites/' + id);
+    } catch (err) {
+      logSupabase('saved.remove', { message: err.message });
+    }
   }
 
   const money = (n) => '\u20AA' + new Intl.NumberFormat('he-IL').format(n);

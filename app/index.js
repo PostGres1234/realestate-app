@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { getSeenMap } from '../lib/inbox';
 import { logSupabase } from '../lib/logger';
+import { api } from '../lib/api';
 import { C } from '../lib/theme';
 import TabBar from '../components/TabBar';
 import CityPicker from '../components/CityPicker';
@@ -162,14 +163,11 @@ export default function Browse() {
     const on = !!favs[id];
     setFavs((p) => ({ ...p, [id]: !on }));
 
-    if (on) {
-      const { error } = await supabase.from('favorites').delete()
-        .eq('user_id', user.id).eq('property_id', id);
-      if (error) logSupabase('favorite.remove', error);
-    } else {
-      const { error } = await supabase.from('favorites')
-        .insert({ user_id: user.id, property_id: id });
-      if (error) logSupabase('favorite.add', error);
+    try {
+      if (on) await api.del('/api/favorites/' + id);
+      else await api.post('/api/favorites/' + id);
+    } catch (err) {
+      logSupabase(on ? 'favorite.remove' : 'favorite.add', { message: err.message });
     }
   }
 
