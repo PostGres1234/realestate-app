@@ -5,7 +5,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { getDraft, saveDraft, clearDraft, markSeen } from '../../lib/inbox';
-import { placeCall, canCall, getBuyerContact } from '../../lib/calls';
+import { placeCall } from '../../lib/calls';
 import { logSupabase } from '../../lib/logger';
 import { api } from '../../lib/api';
 import { C } from '../../lib/theme';
@@ -91,6 +91,17 @@ export default function Chat() {
   }, [id]);
 
   useEffect(() => {
+    async function loadCallInfo() {
+      if (!user?.id) return;
+      try {
+        const info = await api.get('/api/calls/' + id);
+        setCallable(info.callable);
+        setBuyer(info.buyer);
+      } catch (err) {
+        logSupabase('chat.callInfo', { message: err.message }, { conversationId: id });
+      }
+    }
+
     (async () => {
       const { data: c, error: convErr } = await supabase
         .from('conversations')
@@ -110,10 +121,7 @@ export default function Chat() {
         setProp(pr);
       }
 
-      if (c && user?.id) {
-        setCallable(await canCall(id, user.id));
-        setBuyer(await getBuyerContact(id, user.id));
-      }
+      if (c) await loadCallInfo();
 
       const { data, error } = await supabase
         .from('messages')
@@ -155,7 +163,7 @@ export default function Chat() {
             if (payload.new.sender_id === c.seller_id) return { ...c, unlocked: true };
             return c;
           });
-          if (user?.id) setCallable(await canCall(id, user.id));
+          await loadCallInfo();
         }
       )
       .on(

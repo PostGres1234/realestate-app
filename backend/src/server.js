@@ -4,6 +4,7 @@ const jimmyRouter = require("./routes/jimmy");
 const contactRouter = require("./routes/contact");
 const listingsRouter = require("./routes/listings");
 const messagesRouter = require("./routes/messages");
+const callsRouter = require("./routes/calls");
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.use("/api/jimmy", jimmyRouter);
 app.use("/api/contact", contactRouter);
 app.use("/api/listings", listingsRouter);
 app.use("/api/messages", messagesRouter);
+app.use("/api/calls", callsRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Backend listening on port " + PORT));
