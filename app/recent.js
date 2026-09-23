@@ -5,6 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
+import { api } from '../lib/api';
 import { C } from '../lib/theme';
 import BackBar from '../components/BackBar';
 
@@ -79,11 +80,11 @@ export default function Recent() {
         style: 'destructive',
         onPress: async () => {
           setItems([]);
-          const { error } = await supabase
-            .from('recently_viewed')
-            .delete()
-            .eq('user_id', user.id);
-          if (error) logSupabase('recent.clear', error);
+          try {
+            await api.del('/api/recent');
+          } catch (err) {
+            logSupabase('recent.clear', { message: err.message });
+          }
         },
       },
     ]);
