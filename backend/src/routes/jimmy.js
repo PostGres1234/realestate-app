@@ -4,8 +4,7 @@ const { requireAuth } = require("../authMiddleware");
 
 const router = express.Router();
 
-const KEY = process.env.GEMINI_API_KEY;
-const MODEL = "gemini-3.5-flash-lite";
+const KEY = process.env.ANTHROPIC_API_KEY;
 
 const TOOLS = [
   {
@@ -13,7 +12,7 @@ const TOOLS = [
     description:
       "מחזיר מחיר ממוצע למ\"ר באזור נתון, על בסיס נתונים פנימיים של האפליקציה (לא נתונים חיים מהאינטרנט). " +
       "השתמש בכלי הזה כשמשתמש שרוצה למכור נכס נתן עיר (ואם יש - גם שכונה).",
-    parameters: {
+    input_schema: {
       type: "object",
       properties: {
         city: { type: "string", description: "שם העיר בעברית, כפי שהמשתמש כתב אותו" },
@@ -166,137 +165,45 @@ async function lookupAreaPrice(city, neighborhood) {
   return await query(""); // city-wide fallback row
 }
 
-// Converts the app's simple {role, content} chat history into Gemini's
-// {role, parts} shape. Anthropic's "assistant" role becomes Gemini's "model".
-function toGeminiContents(messages) {
-  return messages.map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
-  }));
-}
-
-function functionCallParts(candidate) {
-  return (candidate?.content?.parts ?? []).filter((p) => p.functionCall);
-}
-
-async function callGemini(contents, system, attempt = 1) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
-  const res = await fetch(url, {
+async function callClaude(messages, system, attempt = 1) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-goog-api-key": KEY,
+      "x-api-key": KEY,
+      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      system_instruction: { parts: [{ text: system }] },
-      contents,
-      tools: [{ function_declarations: TOOLS }],
-      generation_config: { max_output_tokens: 900 },
+      model: "claude-sonnet-4-6",
+      max_tokens: 900,
+      system,
+      messages,
+      tools: TOOLS,
     }),
   });
   const data = await res.json();
-  console.log("gemini status", res.status);
-  console.log("gemini body", JSON.stringify(data).slice(0, 600));
+  console.log("anthropic status", res.status);
+  console.log("anthropic body", JSON.stringify(data).slice(0, 600));
 
-  // Gemini occasionally returns 503 (model overloaded) or 429 (rate limited)
+  // Anthropic occasionally returns 529 (overloaded) or 429 (rate limited)
   // under normal load - these are transient, so retry a couple of times
   // with a short backoff before giving up.
-  const retryable = res.status === 503 || res.status === 429;
+  const retryable = res.status === 529 || res.status === 429;
   if (retryable && attempt < 3) {
     await new Promise((r) => setTimeout(r, attempt * 800));
-    return callGemini(contents, system, attempt + 1);
+    return callClaude(messages, system, attempt + 1);
   }
 
-  // Without this check, an error response (no candidates) silently produces
-  // an empty chat bubble instead of the "try again" fallback below.
+  // Without this check, an error response (no content) silently produces an
+  // empty chat bubble instead of the "try again" fallback below.
   if (!res.ok || data.error) {
-    throw new Error(data.error?.message || `Gemini request failed (${res.status})`);
+    throw new Error(data.error?.message || `Anthropic request failed (${res.status})`);
   }
 
   return data;
 }
 
-// Streams the final (non-tool-call) reply straight through to the client as
-// it's generated, instead of waiting for the whole ~900-token response.
-// PROPERTIES:/OPTIONS:/MULTI: are technical marker lines the model always
-// puts at the very end - never forwarded, only the text before them is, so
-// the client never sees them flash by mid-stream.
-async function streamFinalReply(contents, system, res) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse`;
-  const upstream = await fetch(url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-goog-api-key": KEY,
-    },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: system }] },
-      contents,
-      tools: [{ function_declarations: TOOLS }],
-      generation_config: { max_output_tokens: 900 },
-    }),
-  });
-
-  if (!upstream.ok || !upstream.body) {
-    const errData = await upstream.json().catch(() => ({}));
-    throw new Error(errData.error?.message || `Gemini stream failed (${upstream.status})`);
-  }
-
-  const reader = upstream.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let fullText = "";
-  let sentLength = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    let idx;
-    while ((idx = buffer.indexOf("\n\n")) !== -1) {
-      const rawEvent = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 2);
-      const line = rawEvent.replace(/^data:\s*/, "").trim();
-      if (!line) continue;
-
-      let chunk;
-      try {
-        chunk = JSON.parse(line);
-      } catch {
-        continue;
-      }
-
-      const delta = (chunk.candidates?.[0]?.content?.parts ?? [])
-        .map((p) => p.text ?? "")
-        .join("");
-      if (!delta) continue;
-
-      fullText += delta;
-
-      const markerIdx = fullText.search(/\n?(PROPERTIES:|OPTIONS:|MULTI:)/);
-      const safeEnd = markerIdx === -1 ? fullText.length : markerIdx;
-      if (safeEnd > sentLength) {
-        res.write(`data: ${JSON.stringify({ delta: fullText.slice(sentLength, safeEnd) })}\n\n`);
-        sentLength = safeEnd;
-      }
-    }
-  }
-
-  return fullText;
-}
-
 router.post("/chat", requireAuth, async (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  if (res.flushHeaders) res.flushHeaders();
-
-  const sendFinal = (payload) => {
-    res.write(`data: ${JSON.stringify({ done: true, ...payload })}\n\n`);
-    res.end();
-  };
-
   try {
     const { messages, listings, focusPropertyId } = req.body;
 
@@ -309,44 +216,32 @@ router.post("/chat", requireAuth, async (req, res) => {
       : "";
 
     const system = (focusPropertyId ? SYSTEM_FOCUS : SYSTEM) + context;
-    const contents = toGeminiContents(messages);
+    const convo = [...messages];
 
-    let data = await callGemini(contents, system);
-    let candidate = data.candidates?.[0];
-    let calls = functionCallParts(candidate);
+    let data = await callClaude(convo, system);
 
-    for (let i = 0; i < 3 && calls.length; i++) {
-      contents.push({ role: "model", parts: candidate.content.parts });
+    for (let i = 0; i < 3 && data.stop_reason === "tool_use"; i++) {
+      const toolUses = (data.content ?? []).filter((b) => b.type === "tool_use");
+      convo.push({ role: "assistant", content: data.content });
 
-      const responseParts = [];
-      for (const part of calls) {
+      const toolResults = [];
+      for (const tu of toolUses) {
         let result = { found: false };
-        if (part.functionCall.name === "lookup_area_price") {
-          const { city, neighborhood } = part.functionCall.args ?? {};
-          const row = await lookupAreaPrice(city, neighborhood);
+        if (tu.name === "lookup_area_price") {
+          const row = await lookupAreaPrice(tu.input.city, tu.input.neighborhood);
           result = row ? { found: true, ...row } : { found: false };
         }
-        responseParts.push({
-          functionResponse: { name: part.functionCall.name, response: result },
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: tu.id,
+          content: JSON.stringify(result),
         });
       }
-      contents.push({ role: "user", parts: responseParts });
-
-      data = await callGemini(contents, system);
-      candidate = data.candidates?.[0];
-      calls = functionCallParts(candidate);
+      convo.push({ role: "user", content: toolResults });
+      data = await callClaude(convo, system);
     }
 
-    // Normally the tool loop above always ends with plain text (the system
-    // prompt expects it), so stream that final answer. In the rare case the
-    // model still wants another tool call after 3 rounds, just use whatever
-    // text is already there rather than looping forever.
-    let text;
-    if (calls.length) {
-      text = (candidate?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
-    } else {
-      text = (await streamFinalReply(contents, system, res)).trim();
-    }
+    let text = (data.content ?? []).map((b) => b.text ?? "").join("").trim();
 
     let ids = [];
     const match = text.match(/PROPERTIES:\s*(.+)$/m);
@@ -365,10 +260,10 @@ router.post("/chat", requireAuth, async (req, res) => {
     const multi = /MULTI:\s*yes/m.test(text);
     text = text.replace(/MULTI:.*$/m, "").trim();
 
-    sendFinal({ text, ids, options, skippable: true, multi });
+    res.json({ text, ids, options, skippable: true, multi });
   } catch (e) {
     console.log("jimmy chat error", String(e));
-    sendFinal({ text: "אירעה שגיאה. נסו שוב.", ids: [], options: [], skippable: false, multi: false });
+    res.json({ text: "אירעה שגיאה. נסו שוב.", ids: [], options: [], skippable: false, multi: false });
   }
 });
 

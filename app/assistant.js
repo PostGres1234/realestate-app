@@ -123,47 +123,31 @@ export default function Assistant() {
     if (!body || busy) return;
 
     const next = [...messages, { role: 'user', content: body }];
-    const streamIndex = next.length;
-    setMessages([...next, { role: 'assistant', content: '', ids: [], options: [], skippable: false, multi: false }]);
+    setMessages(next);
     if (!overrideText) setText('');
     setBusy(true);
 
-    function updateStreamed(patch) {
-      setMessages((prev) => {
-        const copy = [...prev];
-        copy[streamIndex] = { ...copy[streamIndex], ...patch };
-        return copy;
-      });
-    }
-
-    function appendDelta(delta) {
-      setMessages((prev) => {
-        const copy = [...prev];
-        copy[streamIndex] = { ...copy[streamIndex], content: copy[streamIndex].content + delta };
-        return copy;
-      });
-    }
-
     try {
-      const out = await api.postStream('/api/jimmy/chat', {
+      const out = await api.post('/api/jimmy/chat', {
         messages: next.map((m) => ({ role: m.role, content: m.content })),
         listings: (focusProperty
           ? [focusProperty, ...listings.filter((l) => l.id !== focusProperty.id)]
           : listings
         ).slice(0, 40),
         focusPropertyId: propertyId ?? null,
-      }, appendDelta);
+      });
 
-      updateStreamed({
+      setMessages([...next, {
+        role: 'assistant',
         content: out.text || T.error,
         ids: out.ids ?? [],
         options: out.options ?? [],
         skippable: !!out.skippable,
         multi: !!out.multi,
-      });
+      }]);
     } catch (err) {
       logSupabase('assistant.send', { message: String(err) });
-      updateStreamed({ content: T.error, ids: [], options: [], skippable: false, multi: false });
+      setMessages([...next, { role: 'assistant', content: T.error, ids: [], options: [], skippable: false, multi: false }]);
     }
     setBusy(false);
   }
@@ -329,7 +313,7 @@ export default function Assistant() {
           );
         }}
         ListFooterComponent={
-          busy && !messages[messages.length - 1]?.content ? (
+          busy ? (
             <View style={[s.row, s.rowBot]}>
               <View style={s.avatar}>
                 <Ionicons name="sparkles" size={14} color={C.primary} />
