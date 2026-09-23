@@ -29,6 +29,17 @@ async function requireOwnedProperty(id, userId, res) {
   return property;
 }
 
+// Returns the pins for the map screen (public listing data - no personal
+// info). Still requires auth since the map itself is gated behind having
+// an account, but otherwise this is a straight passthrough to the same
+// map_properties RPC the client used to call directly.
+router.get("/map", requireAuth, async (req, res) => {
+  const deal = req.query.deal || "all";
+  const { data, error } = await supabaseAdmin.rpc("map_properties", { p_deal: deal });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data ?? []);
+});
+
 // Creates a listing. seller_id always comes from the verified token, never
 // from the request body - a client can never create a listing "as" someone
 // else, even by tampering with the request.

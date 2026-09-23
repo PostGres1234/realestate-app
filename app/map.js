@@ -3,9 +3,9 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet, PanRe
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
+import { api } from '../lib/api';
 import { C } from '../lib/theme';
 import BackBar from '../components/BackBar';
 
@@ -297,8 +297,13 @@ export default function MapScreen() {
   const load = useCallback(async () => {
     if (!user) { setLoading(false); return; }
     setLoading(true);
-    const { data, error } = await supabase.rpc('map_properties', { p_deal: mode });
-    if (error) logSupabase('map.load', error, { mode });
+
+    let data = [];
+    try {
+      data = await api.get('/api/listings/map?deal=' + mode);
+    } catch (err) {
+      logSupabase('map.load', { message: err.message }, { mode });
+    }
 
     const money = (n) => '\u20AA' + new Intl.NumberFormat('he-IL').format(n);
 
