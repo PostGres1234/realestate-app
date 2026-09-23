@@ -179,7 +179,7 @@ function functionCallParts(candidate) {
   return (candidate?.content?.parts ?? []).filter((p) => p.functionCall);
 }
 
-async function callGemini(contents, system) {
+async function callGemini(contents, system, attempt = 1) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
   const res = await fetch(url, {
     method: "POST",
@@ -197,6 +197,22 @@ async function callGemini(contents, system) {
   const data = await res.json();
   console.log("gemini status", res.status);
   console.log("gemini body", JSON.stringify(data).slice(0, 600));
+
+  // Gemini occasionally returns 503 (model overloaded) or 429 (rate limited)
+  // under normal load - these are transient, so retry a couple of times
+  // with a short backoff before giving up.
+  const retryable = res.status === 503 || res.status === 429;
+  if (retryable && attempt < 3) {
+    await new Promise((r) => setTimeout(r, attempt * 800));
+    return callGemini(contents, system, attempt + 1);
+  }
+
+  // Without this check, an error response (no candidates) silently produces
+  // an empty chat bubble instead of the "try again" fallback below.
+  if (!res.ok || data.error) {
+    throw new Error(data.error?.message || `Gemini request failed (${res.status})`);
+  }
+
   return data;
 }
 
