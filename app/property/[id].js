@@ -51,6 +51,7 @@ const T = {
   cancel: 'ביטול',
   introMissing: 'חסרים פרטים',
   introMissingBody: 'יש למלא שם פרטי, שם משפחה ועיסוק.',
+  askJimmy: 'שאלו את ג׳ימי על הנכס הזה',
 };
 
 const FEATURES = [
@@ -340,6 +341,16 @@ export default function PropertyDetail() {
             </Pressable>
 
             {user ? (
+              <Pressable
+                style={s.jimmyBtn}
+                onPress={() => router.push({ pathname: '/assistant', params: { propertyId: p.id } })}
+              >
+                <Ionicons name="sparkles-outline" size={16} color={C.primary} />
+                <Text style={s.jimmyBtnText}>{T.askJimmy}</Text>
+              </Pressable>
+            ) : null}
+
+            {user ? (
               <Pressable style={s.reportBtn} onPress={() => setReportOpen(true)}>
                 <Ionicons name="flag-outline" size={15} color={C.textMuted} />
                 <Text style={s.reportText}>{T.report}</Text>
@@ -513,6 +524,8 @@ const s = StyleSheet.create({
   lockText: { color: C.textSecondary, textAlign: 'right', lineHeight: 22, flex: 1 },
   btn: { backgroundColor: C.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 24 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  jimmyBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderColor: C.primary, borderRadius: 14, paddingVertical: 13, marginTop: 10 },
+  jimmyBtnText: { color: C.primary, fontWeight: '600', fontSize: 14 },
   reportBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, marginTop: 4 },
   reportText: { color: C.textMuted, fontSize: 13, fontWeight: '600' },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
