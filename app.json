@@ -23,7 +23,7 @@
       "package": "com.naim_jubran5.realestateapp"
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
