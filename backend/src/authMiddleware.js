@@ -13,13 +13,9 @@ async function requireAuth(req, res, next) {
 
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !data?.user) {
-    // TEMP DEBUG - log the real underlying reason, not just a generic 401.
-    console.log("requireAuth rejected token:", JSON.stringify({
-      message: error?.message,
-      status: error?.status,
-      name: error?.name,
-      code: error?.code,
-    }));
+    // Logged server-side only (never sent to the client) so a rejected
+    // token's real cause is visible in Render's logs instead of a dead end.
+    console.log("requireAuth rejected token:", error?.message);
     return res.status(401).json({ error: "Invalid or expired session" });
   }
 
