@@ -249,13 +249,15 @@ export default function NewListing() {
         .from('property-images')
         .getPublicUrl(path);
 
-      const { error: rowErr } = await supabase.from('property_images').insert({
-        property_id: propertyId,
-        url: pub.publicUrl,
-        position: i,
-        media_type: kind,
-      });
-      if (rowErr) logSupabase('listing.imageRow', rowErr, { kind });
+      try {
+        await api.post('/api/listings/' + propertyId + '/media', {
+          url: pub.publicUrl,
+          position: i,
+          mediaType: kind,
+        });
+      } catch (err) {
+        logSupabase('listing.imageRow', { message: err.message }, { kind });
+      }
     }
   }
 

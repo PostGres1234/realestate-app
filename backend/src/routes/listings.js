@@ -103,9 +103,58 @@ router.delete("/:id", requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// Updates a listing's details (not media - photo/video uploads still go
-// straight to Supabase Storage from the client, as before). Same ownership
-// check as delete: only the actual seller can edit their own listing.
+// Records an uploaded photo/video against a listing. Raw bytes still go
+// straight to Supabase Storage from the client (unavoidable - that's the
+// file upload itself); this just records the resulting row, ownership-
+// checked the same as every other write here.
+router.post("/:id/media", requireAuth, async (req, res) => {
+  const property = await requireOwnedProperty(req.params.id, req.user.id, res);
+  if (!property) return;
+
+  const { url, position, mediaType } = req.body || {};
+  if (!url || !mediaType) {
+    return res.status(400).json({ error: "Missing url or mediaType" });
+  }
+
+  const { error } = await supabaseAdmin.from("property_images").insert({
+    property_id: req.params.id,
+    url,
+    position: position ?? 0,
+    media_type: mediaType,
+  });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+// Deletes a single photo/video row. Unlike the old client-side delete
+// (`.eq('id', item.id)` with no ownership check at all), this verifies the
+// image belongs to a listing the caller actually owns before deleting it.
+router.delete("/media/:imageId", requireAuth, async (req, res) => {
+  const { data: image, error: imgError } = await supabaseAdmin
+    .from("property_images")
+    .select("id, property_id")
+    .eq("id", req.params.imageId)
+    .maybeSingle();
+
+  if (imgError) return res.status(500).json({ error: imgError.message });
+  if (!image) return res.status(404).json({ error: "Image not found" });
+
+  const property = await requireOwnedProperty(image.property_id, req.user.id, res);
+  if (!property) return;
+
+  const { error } = await supabaseAdmin
+    .from("property_images")
+    .delete()
+    .eq("id", req.params.imageId);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+// Updates a listing's details (not media - see the routes above). Same
+// ownership check as delete: only the actual seller can edit their own
+// listing.
 router.patch("/:id", requireAuth, async (req, res) => {
   const property = await requireOwnedProperty(req.params.id, req.user.id, res);
   if (!property) return;

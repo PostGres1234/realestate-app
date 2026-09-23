@@ -199,11 +199,11 @@ export default function EditListing() {
         text: T.confirmDel,
         style: 'destructive',
         onPress: async () => {
-          const { error } = await supabase
-            .from('property_images')
-            .delete()
-            .eq('id', item.id);
-          if (error) return Alert.alert(T.failTitle, error.message);
+          try {
+            await api.del('/api/listings/media/' + item.id);
+          } catch (err) {
+            return Alert.alert(T.failTitle, err.message);
+          }
           setExisting((prev) => prev.filter((x) => x.id !== item.id));
         },
       },
@@ -245,15 +245,14 @@ export default function EditListing() {
         .from('property-images')
         .getPublicUrl(path);
 
-      const { error: rowErr } = await supabase.from('property_images').insert({
-        property_id: id,
-        url: pub.publicUrl,
-        position: pos,
-        media_type: kind,
-      });
-
-      if (rowErr) {
-        logSupabase('listing.editImageRow', rowErr, { kind });
+      try {
+        await api.post('/api/listings/' + id + '/media', {
+          url: pub.publicUrl,
+          position: pos,
+          mediaType: kind,
+        });
+      } catch (err) {
+        logSupabase('listing.editImageRow', { message: err.message }, { kind });
         failures++;
         continue;
       }
