@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, Modal, Alert, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
+import { api } from '../lib/api';
 import { C } from '../lib/theme';
 
 const T = {
@@ -34,7 +33,6 @@ const REASONS = [
 ];
 
 export default function ReportSheet({ visible, onClose, targetUser, targetProperty, onBlocked }) {
-  const { user } = useAuth();
   const [reason, setReason] = useState(null);
   const [details, setDetails] = useState('');
   const [alsoBlock, setAlsoBlock] = useState(false);
@@ -44,28 +42,19 @@ export default function ReportSheet({ visible, onClose, targetUser, targetProper
     if (!reason) return Alert.alert(T.failTitle, T.needReason);
     setBusy(true);
 
-    const { error } = await supabase.from('reports').insert({
-      reporter_id: user.id,
-      target_user: targetUser ?? null,
-      target_property: targetProperty ?? null,
-      reason,
-      details: details.trim() || null,
-    });
-
-    if (error) {
-      setBusy(false);
-      logSupabase('report.create', error);
-      return Alert.alert(T.failTitle, error.message);
-    }
-
-    let blocked = false;
-    if (alsoBlock && targetUser) {
-      const { error: bErr } = await supabase.from('blocks').insert({
-        blocker_id: user.id,
-        blocked_id: targetUser,
+    let result;
+    try {
+      result = await api.post('/api/reports', {
+        targetUser: targetUser ?? null,
+        targetProperty: targetProperty ?? null,
+        reason,
+        details: details.trim() || null,
+        alsoBlock,
       });
-      if (bErr) logSupabase('report.block', bErr);
-      else blocked = true;
+    } catch (err) {
+      setBusy(false);
+      logSupabase('report.create', { message: err.message });
+      return Alert.alert(T.failTitle, err.message);
     }
 
     setBusy(false);
@@ -74,8 +63,8 @@ export default function ReportSheet({ visible, onClose, targetUser, targetProper
     setAlsoBlock(false);
     onClose();
 
-    Alert.alert(T.doneTitle, blocked ? T.doneBlocked : T.doneBody);
-    if (blocked && onBlocked) onBlocked();
+    Alert.alert(T.doneTitle, result.blocked ? T.doneBlocked : T.doneBody);
+    if (result.blocked && onBlocked) onBlocked();
   }
 
   return (
