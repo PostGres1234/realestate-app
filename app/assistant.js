@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import BackBar from '../components/BackBar';
@@ -22,6 +22,7 @@ const T = {
   opener: 'היי, אני ג׳ימי. אני כאן כדי לעזור.\n\nאתם מחפשים נכס, או שיש לכם נכס למכירה או להשכרה?',
   openerOption1: 'מחפש/ת נכס',
   openerOption2: 'יש לי נכס למכירה או להשכרה',
+  focusOpener: 'היי, אני ג׳ימי. אשמח לעזור עם שאלות על הנכס הזה. מה תרצו לדעת?',
   error: 'אירעה שגיאה בחיבור. נסו שוב.',
   skip: 'דילוג',
   confirm: 'אישור',
@@ -48,18 +49,22 @@ function Bubble({ content, mine }) {
 
 export default function Assistant() {
   const { user } = useAuth();
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: T.opener,
-      ids: [],
-      options: [T.openerOption1, T.openerOption2],
-      skippable: false,
-      multi: false,
-    },
-  ]);
+  const { propertyId } = useLocalSearchParams();
+  const [messages, setMessages] = useState(() =>
+    propertyId
+      ? [{ role: 'assistant', content: T.focusOpener, ids: [propertyId], options: [], skippable: false, multi: false }]
+      : [{
+          role: 'assistant',
+          content: T.opener,
+          ids: [],
+          options: [T.openerOption1, T.openerOption2],
+          skippable: false,
+          multi: false,
+        }]
+  );
   const [listings, setListings] = useState([]);
   const [byId, setById] = useState({});
+  const [focusProperty, setFocusProperty] = useState(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState({});
@@ -89,9 +94,29 @@ export default function Assistant() {
           }
         });
       }
-      setById(map);
+      setById((prev) => ({ ...map, ...prev }));
     })();
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !propertyId) return;
+    (async () => {
+      const { data: rows, error } = await supabase.rpc('property_detail', { p_id: propertyId });
+      const data = Array.isArray(rows) ? rows[0] : rows;
+      if (error || !data) return logSupabase('assistant.focusProperty', error ?? { message: 'not found' }, { propertyId });
+
+      const { data: imgs } = await supabase
+        .from('property_images')
+        .select('url, position, media_type')
+        .eq('property_id', propertyId)
+        .eq('media_type', 'image')
+        .order('position', { ascending: true });
+
+      const withCover = { ...data, cover: imgs?.[0]?.url ?? null };
+      setFocusProperty(withCover);
+      setById((prev) => ({ ...prev, [propertyId]: withCover }));
+    })();
+  }, [user, propertyId]);
 
   async function send(overrideText) {
     const body = (overrideText ?? text).trim();
@@ -105,7 +130,11 @@ export default function Assistant() {
     try {
       const out = await api.post('/api/jimmy/chat', {
         messages: next.map((m) => ({ role: m.role, content: m.content })),
-        listings: listings.slice(0, 40),
+        listings: (focusProperty
+          ? [focusProperty, ...listings.filter((l) => l.id !== focusProperty.id)]
+          : listings
+        ).slice(0, 40),
+        focusPropertyId: propertyId ?? null,
       });
 
       setMessages([...next, {
@@ -138,14 +167,18 @@ export default function Assistant() {
   }
 
   function restart() {
-    setMessages([{
-      role: 'assistant',
-      content: T.opener,
-      ids: [],
-      options: [T.openerOption1, T.openerOption2],
-      skippable: false,
-      multi: false,
-    }]);
+    setMessages(
+      propertyId
+        ? [{ role: 'assistant', content: T.focusOpener, ids: [propertyId], options: [], skippable: false, multi: false }]
+        : [{
+            role: 'assistant',
+            content: T.opener,
+            ids: [],
+            options: [T.openerOption1, T.openerOption2],
+            skippable: false,
+            multi: false,
+          }]
+    );
     setSelected({});
     setText('');
   }
