@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { logSupabase } from '../../lib/logger';
 import { geocodeAddress } from '../../lib/geocode';
+import { api } from '../../lib/api';
 import { C } from '../../lib/theme';
 import BackBar from '../../components/BackBar';
 import LocationInput from '../../components/LocationInput';
@@ -282,11 +283,10 @@ export default function NewListing() {
 
     setStage(T.busy);
 
-    const { data, error } = await supabase
-      .from('properties')
-      .insert({
-        seller_id: user.id,
-        listing_type: listingType,
+    let listingId;
+    try {
+      const result = await api.post('/api/listings', {
+        listingType,
         title: title.trim(),
         description: description.trim() || null,
         price: Number(price),
@@ -298,32 +298,29 @@ export default function NewListing() {
         bedrooms: bedrooms ? Number(bedrooms) : null,
         bathrooms: bathrooms ? Number(bathrooms) : null,
         area_sqm: area ? Number(area) : null,
-        property_type: type,
-        has_balcony: !!feats.has_balcony,
-        has_shelter: !!feats.has_shelter,
-        has_parking: !!feats.has_parking,
-        has_elevator: !!feats.has_elevator,
-        has_yard: !!feats.has_yard,
-        possession_date: possession.value,
-        status: 'active',
-      })
-      .select('id')
-      .single();
-
-    if (error) {
+        propertyType: type,
+        hasBalcony: !!feats.has_balcony,
+        hasShelter: !!feats.has_shelter,
+        hasParking: !!feats.has_parking,
+        hasElevator: !!feats.has_elevator,
+        hasYard: !!feats.has_yard,
+        possessionDate: possession.value,
+      });
+      listingId = result.id;
+    } catch (err) {
       setBusy(false);
-      logSupabase('listing.create', error, {
+      logSupabase('listing.create', { message: err.message }, {
         listingType,
         hasPhotos: photos.length > 0,
         hasVideo: !!video,
         geocoded: !!geo,
       });
-      return Alert.alert(T.failTitle, error.message);
+      return Alert.alert(T.failTitle, err.message);
     }
 
     if (photos.length || video) {
       setStage(T.uploading);
-      await uploadMedia(data.id);
+      await uploadMedia(listingId);
     }
 
     setBusy(false);
