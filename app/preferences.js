@@ -5,6 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { logSupabase } from '../lib/logger';
+import { api } from '../lib/api';
 import { C } from '../lib/theme';
 import BackBar from '../components/BackBar';
 import MultiCityInput from '../components/MultiCityInput';
@@ -128,31 +129,30 @@ export default function Preferences() {
 
   async function save() {
     setBusy(true);
-    const { error } = await supabase.from('preferences').upsert({
-      user_id: user.id,
-      listing_type: deal,
-      city: cities.length ? cities.join(',') : null,
-      property_type: ptype,
-      min_price: num(minPrice),
-      max_price: num(maxPrice),
-      min_bedrooms: num(minRooms),
-      max_bedrooms: num(maxRooms),
-      min_baths: num(minBaths),
-      max_baths: num(maxBaths),
-      has_balcony: !!feats.has_balcony,
-      has_shelter: !!feats.has_shelter,
-      has_parking: !!feats.has_parking,
-      has_elevator: !!feats.has_elevator,
-      has_yard: !!feats.has_yard,
-      notify,
-      updated_at: new Date().toISOString(),
-    });
-    setBusy(false);
-
-    if (error) {
-      logSupabase('prefs.save', error);
-      return Alert.alert(T.failTitle, error.message);
+    try {
+      await api.post('/api/preferences', {
+        listingType: deal,
+        city: cities.length ? cities.join(',') : null,
+        propertyType: ptype,
+        minPrice: num(minPrice),
+        maxPrice: num(maxPrice),
+        minBedrooms: num(minRooms),
+        maxBedrooms: num(maxRooms),
+        minBaths: num(minBaths),
+        maxBaths: num(maxBaths),
+        hasBalcony: !!feats.has_balcony,
+        hasShelter: !!feats.has_shelter,
+        hasParking: !!feats.has_parking,
+        hasElevator: !!feats.has_elevator,
+        hasYard: !!feats.has_yard,
+        notify,
+      });
+    } catch (err) {
+      setBusy(false);
+      logSupabase('prefs.save', { message: err.message });
+      return Alert.alert(T.failTitle, err.message);
     }
+    setBusy(false);
     Alert.alert(T.savedTitle, T.savedBody);
     router.back();
   }
