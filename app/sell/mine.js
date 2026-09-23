@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
+import { api } from '../../lib/api';
 import { C } from '../../lib/theme';
 
 const T = {
@@ -73,13 +74,11 @@ export default function MyListings() {
         text: T.confirmDel,
         style: 'destructive',
         onPress: async () => {
-          const { error } = await supabase
-            .from('properties')
-            .delete()
-            .eq('id', item.id);
-          if (error) {
-            console.log('delete error', error.message);
-            return Alert.alert(T.failTitle, error.message);
+          try {
+            await api.del('/api/listings/' + item.id);
+          } catch (err) {
+            console.log('delete error', err.message);
+            return Alert.alert(T.failTitle, err.message);
           }
           setRows((prev) => prev.filter((r) => r.id !== item.id));
         },
