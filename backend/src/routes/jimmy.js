@@ -4,7 +4,8 @@ const { requireAuth } = require("../authMiddleware");
 
 const router = express.Router();
 
-const KEY = process.env.ANTHROPIC_API_KEY;
+const KEY = process.env.GEMINI_API_KEY;
+const MODEL = "gemini-3.8-flash";
 
 const TOOLS = [
   {
@@ -12,7 +13,7 @@ const TOOLS = [
     description:
       "מחזיר מחיר ממוצע למ\"ר באזור נתון, על בסיס נתונים פנימיים של האפליקציה (לא נתונים חיים מהאינטרנט). " +
       "השתמש בכלי הזה כשמשתמש שרוצה למכור נכס נתן עיר (ואם יש - גם שכונה).",
-    input_schema: {
+    parameters: {
       type: "object",
       properties: {
         city: { type: "string", description: "שם העיר בעברית, כפי שהמשתמש כתב אותו" },
@@ -165,25 +166,37 @@ async function lookupAreaPrice(city, neighborhood) {
   return await query(""); // city-wide fallback row
 }
 
-async function callClaude(messages, system) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+// Converts the app's simple {role, content} chat history into Gemini's
+// {role, parts} shape. Anthropic's "assistant" role becomes Gemini's "model".
+function toGeminiContents(messages) {
+  return messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+}
+
+function functionCallParts(candidate) {
+  return (candidate?.content?.parts ?? []).filter((p) => p.functionCall);
+}
+
+async function callGemini(contents, system) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": KEY,
-      "anthropic-version": "2023-06-01",
+      "x-goog-api-key": KEY,
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 900,
-      system,
-      messages,
-      tools: TOOLS,
+      system_instruction: { parts: [{ text: system }] },
+      contents,
+      tools: [{ function_declarations: TOOLS }],
+      generation_config: { max_output_tokens: 900 },
     }),
   });
   const data = await res.json();
-  console.log("anthropic status", res.status);
-  console.log("anthropic body", JSON.stringify(data).slice(0, 600));
+  console.log("gemini status", res.status);
+  console.log("gemini body", JSON.stringify(data).slice(0, 600));
   return data;
 }
 
@@ -196,32 +209,35 @@ router.post("/chat", requireAuth, async (req, res) => {
       : "";
 
     const system = (focusPropertyId ? SYSTEM_FOCUS : SYSTEM) + context;
-    const convo = [...messages];
+    const contents = toGeminiContents(messages);
 
-    let data = await callClaude(convo, system);
+    let data = await callGemini(contents, system);
+    let candidate = data.candidates?.[0];
+    let calls = functionCallParts(candidate);
 
-    for (let i = 0; i < 3 && data.stop_reason === "tool_use"; i++) {
-      const toolUses = (data.content ?? []).filter((b) => b.type === "tool_use");
-      convo.push({ role: "assistant", content: data.content });
+    for (let i = 0; i < 3 && calls.length; i++) {
+      contents.push({ role: "model", parts: candidate.content.parts });
 
-      const toolResults = [];
-      for (const tu of toolUses) {
+      const responseParts = [];
+      for (const part of calls) {
         let result = { found: false };
-        if (tu.name === "lookup_area_price") {
-          const row = await lookupAreaPrice(tu.input.city, tu.input.neighborhood);
+        if (part.functionCall.name === "lookup_area_price") {
+          const { city, neighborhood } = part.functionCall.args ?? {};
+          const row = await lookupAreaPrice(city, neighborhood);
           result = row ? { found: true, ...row } : { found: false };
         }
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: tu.id,
-          content: JSON.stringify(result),
+        responseParts.push({
+          functionResponse: { name: part.functionCall.name, response: result },
         });
       }
-      convo.push({ role: "user", content: toolResults });
-      data = await callClaude(convo, system);
+      contents.push({ role: "user", parts: responseParts });
+
+      data = await callGemini(contents, system);
+      candidate = data.candidates?.[0];
+      calls = functionCallParts(candidate);
     }
 
-    let text = (data.content ?? []).map((b) => b.text ?? "").join("").trim();
+    let text = (candidate?.content?.parts ?? []).map((p) => p.text ?? "").join("").trim();
 
     let ids = [];
     const match = text.match(/PROPERTIES:\s*(.+)$/m);
