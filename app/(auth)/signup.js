@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Alert, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -7,6 +7,14 @@ import { logSupabase } from '../../lib/logger';
 import { C } from '../../lib/theme';
 
 const MIN_AGE = 18;
+
+const MONTHS = [
+  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
+];
+const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = Array.from({ length: 100 }, (_, i) => CURRENT_YEAR - i);
 
 const T = {
   title: 'יצירת חשבון',
@@ -21,10 +29,12 @@ const T = {
   phonePlaceholder: '050-0000000',
   phoneHint: 'יוצג לבעלי נכסים שאליהם תפנו, כדי שיוכלו לחזור אליכם.',
   dobLabel: 'תאריך לידה',
+  dobPlaceholder: 'בחרו תאריך לידה',
   dobHint: 'ההרשמה מיועדת לבני 18 ומעלה',
   day: 'יום',
   month: 'חודש',
   year: 'שנה',
+  dobDone: 'אישור',
   emailLabel: 'אימייל',
   emailPlaceholder: 'name@gmail.com',
   passLabel: 'סיסמה',
@@ -89,6 +99,10 @@ export default function SignUp() {
   const [day, setDay] = useState('');
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
+  const [dobModalOpen, setDobModalOpen] = useState(false);
+  const [pendingDay, setPendingDay] = useState('');
+  const [pendingMonth, setPendingMonth] = useState('');
+  const [pendingYear, setPendingYear] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -170,22 +184,83 @@ export default function SignUp() {
 
       <View style={s.field}>
         <Text style={s.label}>{T.dobLabel}</Text>
-        <View style={s.dobRow}>
-          <TextInput style={[s.input, s.dobPart]} placeholder={T.day}
-            placeholderTextColor="#A9B0BF" keyboardType="number-pad" maxLength={2}
-            value={day} onChangeText={setDay} />
-          <TextInput style={[s.input, s.dobPart]} placeholder={T.month}
-            placeholderTextColor="#A9B0BF" keyboardType="number-pad" maxLength={2}
-            value={month} onChangeText={setMonth} />
-          <TextInput style={[s.input, s.dobYear]} placeholder={T.year}
-            placeholderTextColor="#A9B0BF" keyboardType="number-pad" maxLength={4}
-            value={year} onChangeText={setYear} />
-        </View>
+        <Pressable
+          style={s.input}
+          onPress={() => {
+            setPendingDay(day);
+            setPendingMonth(month);
+            setPendingYear(year);
+            setDobModalOpen(true);
+          }}
+        >
+          <Text style={day && month && year ? s.dobValue : s.dobPlaceholder}>
+            {day && month && year
+              ? `${day} ${MONTHS[Number(month) - 1] ?? month} ${year}`
+              : T.dobPlaceholder}
+          </Text>
+        </Pressable>
         <View style={s.hintRow}>
           <Ionicons name="information-circle-outline" size={14} color={C.textMuted} />
           <Text style={s.hint}>{T.dobHint}</Text>
         </View>
       </View>
+
+      <Modal visible={dobModalOpen} transparent animationType="slide"
+        onRequestClose={() => setDobModalOpen(false)}>
+        <View style={s.backdrop}>
+          <View style={s.sheet}>
+            <Text style={s.sheetTitle}>{T.dobLabel}</Text>
+
+            <View style={s.pickerRow}>
+              <View style={s.pickerCol}>
+                <Text style={s.pickerColLabel}>{T.year}</Text>
+                <ScrollView style={s.pickerScroll} showsVerticalScrollIndicator={false}>
+                  {YEARS.map((y) => (
+                    <Pressable key={y} style={s.pickerRowItem} onPress={() => setPendingYear(String(y))}>
+                      <Text style={String(y) === pendingYear ? s.pickerItemOn : s.pickerItem}>{y}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={s.pickerCol}>
+                <Text style={s.pickerColLabel}>{T.month}</Text>
+                <ScrollView style={s.pickerScroll} showsVerticalScrollIndicator={false}>
+                  {MONTHS.map((name, i) => (
+                    <Pressable key={name} style={s.pickerRowItem} onPress={() => setPendingMonth(String(i + 1))}>
+                      <Text style={String(i + 1) === pendingMonth ? s.pickerItemOn : s.pickerItem}>{name}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={s.pickerCol}>
+                <Text style={s.pickerColLabel}>{T.day}</Text>
+                <ScrollView style={s.pickerScroll} showsVerticalScrollIndicator={false}>
+                  {DAYS.map((d) => (
+                    <Pressable key={d} style={s.pickerRowItem} onPress={() => setPendingDay(String(d))}>
+                      <Text style={String(d) === pendingDay ? s.pickerItemOn : s.pickerItem}>{d}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
+            <Pressable
+              style={[s.btn, !(pendingDay && pendingMonth && pendingYear) && { opacity: 0.5 }]}
+              disabled={!(pendingDay && pendingMonth && pendingYear)}
+              onPress={() => {
+                setDay(pendingDay);
+                setMonth(pendingMonth);
+                setYear(pendingYear);
+                setDobModalOpen(false);
+              }}
+            >
+              <Text style={s.btnText}>{T.dobDone}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <View style={s.field}>
         <Text style={s.label}>{T.emailLabel}</Text>
@@ -236,11 +311,20 @@ const s = StyleSheet.create({
   passWrap: { flexDirection: 'row-reverse', alignItems: 'center', borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 14 },
   passInput: { flex: 1, padding: 14, fontSize: 15, textAlign: 'right', color: C.text },
   eye: { paddingHorizontal: 14, paddingVertical: 14 },
-  dobRow: { flexDirection: 'row-reverse', gap: 10 },
-  dobPart: { flex: 1, minWidth: 0, textAlign: 'center' },
-  dobYear: { flex: 1.6, minWidth: 0, textAlign: 'center' },
+  dobValue: { fontSize: 15, textAlign: 'right', color: C.text },
+  dobPlaceholder: { fontSize: 15, textAlign: 'right', color: '#A9B0BF' },
   btn: { backgroundColor: C.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 8 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   link: { textAlign: 'center', color: C.primary, marginTop: 16, fontSize: 14 },
   linkMuted: { textAlign: 'center', color: C.textMuted, marginTop: 14, fontSize: 13 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: C.page, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 32 },
+  sheetTitle: { fontSize: 18, fontWeight: '700', color: C.text, textAlign: 'right', marginBottom: 14 },
+  pickerRow: { flexDirection: 'row-reverse', gap: 10, height: 220, marginBottom: 18 },
+  pickerCol: { flex: 1 },
+  pickerColLabel: { fontSize: 12, fontWeight: '600', color: C.textMuted, textAlign: 'center', marginBottom: 6 },
+  pickerScroll: { flex: 1, borderWidth: 1, borderColor: C.border, borderRadius: 12, backgroundColor: C.surface },
+  pickerRowItem: { paddingVertical: 10, alignItems: 'center' },
+  pickerItem: { fontSize: 15, color: C.textSecondary },
+  pickerItemOn: { fontSize: 15, fontWeight: '700', color: C.primary },
 });
