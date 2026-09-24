@@ -10,7 +10,7 @@ const router = express.Router();
 router.get("/", requireAuth, async (req, res) => {
   const { data: blocks, error } = await supabaseAdmin
     .from("blocks")
-    .select("id, blocked_id, created_at")
+    .select("blocked_id, created_at")
     .eq("blocker_id", req.user.id)
     .order("created_at", { ascending: false });
 
@@ -31,7 +31,6 @@ router.get("/", requireAuth, async (req, res) => {
   profiles.forEach((p) => { nameById[p.id] = p.full_name; });
 
   res.json((blocks ?? []).map((b) => ({
-    id: b.id,
     userId: b.blocked_id,
     fullName: nameById[b.blocked_id] ?? null,
     createdAt: b.created_at,

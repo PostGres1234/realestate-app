@@ -55,7 +55,7 @@ export default function BlockedUsers() {
       ) : (
         <FlatList
           data={items}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.userId}
           contentContainerStyle={{ padding: 16, gap: 10, flexGrow: 1 }}
           ListEmptyComponent={
             <View style={s.empty}>
