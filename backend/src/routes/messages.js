@@ -1,6 +1,7 @@
 const express = require("express");
 const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
+const { serverError } = require("../serverError");
 
 const router = express.Router();
 
@@ -21,7 +22,7 @@ router.post("/", requireAuth, async (req, res) => {
     .eq("id", conversationId)
     .maybeSingle();
 
-  if (convError) return res.status(500).json({ error: convError.message });
+  if (convError) return serverError(res, convError, "messages.send.conversation");
   if (!conv) return res.status(404).json({ error: "Conversation not found" });
 
   const isBuyer = req.user.id === conv.buyer_id;
@@ -39,7 +40,7 @@ router.post("/", requireAuth, async (req, res) => {
     body: trimmed,
   });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "messages.send");
   res.json({ ok: true });
 });
 
@@ -56,7 +57,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
     .eq("id", req.params.id)
     .maybeSingle();
 
-  if (msgError) return res.status(500).json({ error: msgError.message });
+  if (msgError) return serverError(res, msgError, "messages.edit.lookup");
   if (!message) return res.status(404).json({ error: "Message not found" });
   if (message.sender_id !== req.user.id) {
     return res.status(403).json({ error: "Not your message" });
@@ -67,7 +68,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
     .update({ body: trimmed })
     .eq("id", req.params.id);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "messages.edit");
   res.json({ ok: true });
 });
 

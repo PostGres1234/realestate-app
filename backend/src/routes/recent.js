@@ -1,6 +1,7 @@
 const express = require("express");
 const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
+const { serverError } = require("../serverError");
 
 const router = express.Router();
 
@@ -13,7 +14,7 @@ router.delete("/", requireAuth, async (req, res) => {
     .delete()
     .eq("user_id", req.user.id);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "recent.clear");
   res.json({ ok: true });
 });
 

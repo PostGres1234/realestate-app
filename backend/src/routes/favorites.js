@@ -1,6 +1,7 @@
 const express = require("express");
 const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
+const { serverError } = require("../serverError");
 
 const router = express.Router();
 
@@ -12,7 +13,7 @@ router.post("/:propertyId", requireAuth, async (req, res) => {
     property_id: req.params.propertyId,
   });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "favorites.add");
   res.json({ ok: true });
 });
 
@@ -24,7 +25,7 @@ router.delete("/:propertyId", requireAuth, async (req, res) => {
     .eq("user_id", req.user.id)
     .eq("property_id", req.params.propertyId);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "favorites.remove");
   res.json({ ok: true });
 });
 

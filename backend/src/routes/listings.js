@@ -1,6 +1,7 @@
 const express = require("express");
 const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
+const { serverError } = require("../serverError");
 
 const router = express.Router();
 
@@ -15,7 +16,7 @@ async function requireOwnedProperty(id, userId, res) {
     .maybeSingle();
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    serverError(res, error, "listings.requireOwnedProperty");
     return null;
   }
   if (!property) {
@@ -36,13 +37,13 @@ async function requireOwnedProperty(id, userId, res) {
 router.get("/map", requireAuth, async (req, res) => {
   const deal = req.query.deal || "all";
   const { data, error } = await supabaseAdmin.rpc("map_properties", { p_deal: deal });
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "listings.map");
 
   const { data: mine, error: mineError } = await supabaseAdmin
     .from("properties")
     .select("id")
     .eq("seller_id", req.user.id);
-  if (mineError) return res.status(500).json({ error: mineError.message });
+  if (mineError) return serverError(res, mineError, "listings.map.mine");
 
   const myIds = new Set((mine ?? []).map((p) => p.id));
   res.json((data ?? []).filter((p) => !myIds.has(p.id)));
@@ -90,7 +91,7 @@ router.post("/", requireAuth, async (req, res) => {
     .select("id")
     .single();
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "listings.create");
   res.json({ id: data.id });
 });
 
@@ -107,7 +108,7 @@ router.delete("/:id", requireAuth, async (req, res) => {
     .delete()
     .eq("id", req.params.id);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "listings.delete");
   res.json({ ok: true });
 });
 
@@ -131,7 +132,7 @@ router.post("/:id/media", requireAuth, async (req, res) => {
     media_type: mediaType,
   });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "listings.media.create");
   res.json({ ok: true });
 });
 
@@ -145,7 +146,7 @@ router.delete("/media/:imageId", requireAuth, async (req, res) => {
     .eq("id", req.params.imageId)
     .maybeSingle();
 
-  if (imgError) return res.status(500).json({ error: imgError.message });
+  if (imgError) return serverError(res, imgError, "listings.media.delete.lookup");
   if (!image) return res.status(404).json({ error: "Image not found" });
 
   const property = await requireOwnedProperty(image.property_id, req.user.id, res);
@@ -156,7 +157,7 @@ router.delete("/media/:imageId", requireAuth, async (req, res) => {
     .delete()
     .eq("id", req.params.imageId);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "listings.media.delete");
   res.json({ ok: true });
 });
 
@@ -194,7 +195,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
     })
     .eq("id", req.params.id);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "listings.update");
   res.json({ ok: true });
 });
 

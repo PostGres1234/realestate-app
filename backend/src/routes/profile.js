@@ -1,6 +1,7 @@
 const express = require("express");
 const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
+const { serverError } = require("../serverError");
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ router.patch("/", requireAuth, async (req, res) => {
     })
     .eq("id", req.user.id);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) return serverError(res, error, "profile.save");
   res.json({ ok: true });
 });
 

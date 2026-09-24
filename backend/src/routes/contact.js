@@ -1,6 +1,7 @@
 const express = require("express");
 const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
+const { serverError } = require("../serverError");
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ router.post("/", requireAuth, async (req, res) => {
     .maybeSingle();
 
   if (existingErr) {
-    return res.status(500).json({ error: existingErr.message });
+    return serverError(res, existingErr, "contact.existing");
   }
   if (existing) {
     return res.json({ conversationId: existing.id, existed: true });
@@ -43,15 +44,17 @@ router.post("/", requireAuth, async (req, res) => {
     .single();
 
   if (convErr) {
-    return res.status(500).json({ error: convErr.message });
+    return serverError(res, convErr, "contact.conversation");
   }
 
+  // The message is the whole point of this action - if it fails, the caller
+  // needs to know rather than seeing a false "sent" success.
   const { error: msgErr } = await supabaseAdmin.from("messages").insert({
     conversation_id: conv.id,
     sender_id: buyerId,
     body,
   });
-  if (msgErr) console.log("contact: message insert failed", msgErr.message);
+  if (msgErr) return serverError(res, msgErr, "contact.message");
 
   const { error: introErr } = await supabaseAdmin
     .from("conversations")

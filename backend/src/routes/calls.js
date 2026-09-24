@@ -1,6 +1,7 @@
 const express = require("express");
 const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
+const { serverError } = require("../serverError");
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ router.get("/:conversationId", requireAuth, async (req, res) => {
     .eq("id", req.params.conversationId)
     .maybeSingle();
 
-  if (convError) return res.status(500).json({ error: convError.message });
+  if (convError) return serverError(res, convError, "calls.lookup");
   if (!conv) return res.status(404).json({ error: "Conversation not found" });
 
   if (conv.seller_id !== req.user.id) {
@@ -30,7 +31,7 @@ router.get("/:conversationId", requireAuth, async (req, res) => {
     .eq("id", conv.buyer_id)
     .maybeSingle();
 
-  if (profileError) return res.status(500).json({ error: profileError.message });
+  if (profileError) return serverError(res, profileError, "calls.profile");
 
   const hasPhone = !!profile?.phone && profile.phone.trim().length >= 6;
   const callable = !!conv.intro_sent && hasPhone && profile?.allow_calls !== false;
