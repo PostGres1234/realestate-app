@@ -20,6 +20,8 @@ const T = {
   prefsHint: 'עדכונים על נכסים שמתאימים לכם',
   recent: 'נצפו לאחרונה',
   recentHint: 'נכסים שפתחתם',
+  blocked: 'משתמשים חסומים',
+  blockedHint: 'ניהול חסימות',
   assistant: 'ג׳ימי',
   assistantHint: 'היועץ שיעזור לכם למצוא אזור מתאים',
   logout: 'התנתקות',
@@ -77,6 +79,7 @@ export default function Account() {
     { icon: 'options-outline', label: T.prefs, hint: T.prefsHint, path: '/preferences' },
     { icon: 'sparkles-outline', label: T.assistant, hint: T.assistantHint, path: '/assistant' },
     { icon: 'time-outline', label: T.recent, hint: T.recentHint, path: '/recent' },
+    { icon: 'ban-outline', label: T.blocked, hint: T.blockedHint, path: '/blocked' },
   ];
 
   return (
