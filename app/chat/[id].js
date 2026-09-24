@@ -353,8 +353,9 @@ export default function Chat() {
           </Pressable>
 
           {otherUser ? (
-            <Pressable onPress={() => setBlockConfirmOpen(true)} hitSlop={8}>
-              <Ionicons name="ban-outline" size={20} color={C.textMuted} />
+            <Pressable style={s.blockHeaderBtn} onPress={() => setBlockConfirmOpen(true)} hitSlop={8}>
+              <Ionicons name="ban-outline" size={17} color={C.danger} />
+              <Text style={s.blockHeaderBtnText}>{T.blockConfirm}</Text>
             </Pressable>
           ) : null}
 
@@ -582,4 +583,6 @@ const s = StyleSheet.create({
   cancelText: { color: C.textMuted, textAlign: 'center', fontSize: 14 },
   blockBodyText: { color: C.textSecondary, fontSize: 14, textAlign: 'right', lineHeight: 20, marginTop: 4 },
   blockConfirmBtn: { backgroundColor: C.danger, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 20 },
+  blockHeaderBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: C.danger, borderRadius: 12, paddingHorizontal: 9, paddingVertical: 5 },
+  blockHeaderBtnText: { color: C.danger, fontSize: 12, fontWeight: '700' },
 });
