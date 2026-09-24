@@ -31,6 +31,10 @@ const T = {
   noteLabel: 'הודעה',
   save: 'שמירה',
   cancel: 'ביטול',
+  blockTitle: 'חסימת משתמש',
+  blockBody: 'לא תוכלו לראות זה את זה או להתכתב. לחסום?',
+  blockConfirm: 'חסימה',
+  blockFail: 'החסימה נכשלה',
 };
 
 const GREETING_PREFIX = 'שלום, מתעניין/ת בנכס: ';
@@ -259,6 +263,25 @@ export default function Chat() {
     if (!res.ok) Alert.alert(T.callTitle, res.message);
   }
 
+  function confirmBlock(targetUserId) {
+    Alert.alert(T.blockTitle, T.blockBody, [
+      { text: T.cancel, style: 'cancel' },
+      {
+        text: T.blockConfirm,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.post('/api/blocks', { blockedUser: targetUserId });
+          } catch (err) {
+            logSupabase('chat.block', { message: err.message }, { conversationId: id });
+            return Alert.alert(T.blockFail, err.message);
+          }
+          router.replace('/messages');
+        },
+      },
+    ]);
+  }
+
   const time = (iso) =>
     new Date(iso).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
 
@@ -334,6 +357,12 @@ export default function Chat() {
           <Pressable onPress={() => setReportOpen(true)} hitSlop={8}>
             <Ionicons name="flag-outline" size={20} color={C.textMuted} />
           </Pressable>
+
+          {otherUser ? (
+            <Pressable onPress={() => confirmBlock(otherUser)} hitSlop={8}>
+              <Ionicons name="ban-outline" size={20} color={C.textMuted} />
+            </Pressable>
+          ) : null}
 
           {callable ? (
             <Pressable style={s.callBtn} onPress={onCall} hitSlop={8}>

@@ -47,6 +47,7 @@ const T = {
   possessionLabel: 'מועד מסירה',
   possessionHint: 'כך קונים ושוכרים ידעו אם התזמון מתאים להם.',
   possessionImmediate: 'מיידי',
+  possessionFlexible: 'גמיש',
   possessionFuture: 'תאריך עתידי',
   day: 'יום',
   month: 'חודש',
@@ -120,7 +121,8 @@ export default function NewListing() {
   const [stage, setStage] = useState('');
 
   function resolvePossessionDate() {
-    if (possessionMode === 'immediate') return { ok: true, value: null };
+    if (possessionMode === 'immediate') return { ok: true, value: null, flexible: false };
+    if (possessionMode === 'flexible') return { ok: true, value: null, flexible: true };
 
     if (!pDay.trim() || !pMonth.trim() || !pYear.trim()) {
       return { ok: false, error: T.missingPossession };
@@ -140,7 +142,7 @@ export default function NewListing() {
     }
 
     const iso = y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-    return { ok: true, value: iso };
+    return { ok: true, value: iso, flexible: false };
   }
 
   async function fileSizeMB(uri) {
@@ -307,6 +309,7 @@ export default function NewListing() {
         hasElevator: !!feats.has_elevator,
         hasYard: !!feats.has_yard,
         possessionDate: possession.value,
+        possessionFlexible: possession.flexible,
       });
       listingId = result.id;
     } catch (err) {
@@ -456,6 +459,14 @@ export default function NewListing() {
             >
               <Text style={possessionMode === 'immediate' ? s.segTextOn : s.segText}>
                 {T.possessionImmediate}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[s.segBtn, possessionMode === 'flexible' && s.segOn]}
+              onPress={() => setPossessionMode('flexible')}
+            >
+              <Text style={possessionMode === 'flexible' ? s.segTextOn : s.segText}>
+                {T.possessionFlexible}
               </Text>
             </Pressable>
             <Pressable
