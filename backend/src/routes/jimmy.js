@@ -1,6 +1,6 @@
 const express = require("express");
+const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
-const { getAreaPrice } = require("../areaPrice");
 
 const router = express.Router();
 
@@ -146,6 +146,25 @@ OPTIONS: אפשרות1|אפשרות2
 
 איך לדבר: עברית יומיומית ורגועה, כמו חבר טוב - חם, קצר וברור. תשובה קצרה - משפט או שניים.`;
 
+async function lookupAreaPrice(city, neighborhood) {
+  async function query(nb) {
+    const { data, error } = await supabaseAdmin
+      .from("area_price_stats")
+      .select("city,neighborhood,avg_price_per_sqm,updated_at")
+      .eq("city", city)
+      .eq("neighborhood", nb)
+      .limit(1);
+    if (error) return null;
+    return Array.isArray(data) && data[0] ? data[0] : null;
+  }
+
+  if (neighborhood) {
+    const exact = await query(neighborhood);
+    if (exact) return exact;
+  }
+  return await query(""); // city-wide fallback row
+}
+
 async function callClaude(messages, system, attempt = 1) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -209,8 +228,8 @@ router.post("/chat", requireAuth, async (req, res) => {
       for (const tu of toolUses) {
         let result = { found: false };
         if (tu.name === "lookup_area_price") {
-          const stats = await getAreaPrice(tu.input.city, tu.input.neighborhood);
-          result = stats ? { found: true, ...stats } : { found: false };
+          const row = await lookupAreaPrice(tu.input.city, tu.input.neighborhood);
+          result = row ? { found: true, ...row } : { found: false };
         }
         toolResults.push({
           type: "tool_result",

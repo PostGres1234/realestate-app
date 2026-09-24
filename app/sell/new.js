@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -33,9 +33,6 @@ const T = {
   cityPlaceholder: 'התחילו להקליד שם עיר',
   hoodLabel: 'שכונה',
   hoodPlaceholder: 'התחילו להקליד שם שכונה',
-  areaPriceHint: (avgPricePerSqm, sampleSize) =>
-    'מחיר ממוצע למ"ר באזור זה: ₪' + new Intl.NumberFormat('he-IL').format(avgPricePerSqm)
-    + ' (מבוסס על ' + sampleSize + ' נכסים פעילים באפליקציה)',
   addressLabel: 'כתובת',
   addressPlaceholder: 'לדוגמה: רחוב הנשיא 12',
   addressHint: 'כתובת מדויקת תציג את הנכס על המפה',
@@ -121,28 +118,6 @@ export default function NewListing() {
   const [pYear, setPYear] = useState('');
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState('');
-  const [areaPrice, setAreaPrice] = useState(null);
-  const areaPriceTimer = useRef(null);
-
-  // Debounced so it doesn't fire on every keystroke while typing a city.
-  useEffect(() => {
-    clearTimeout(areaPriceTimer.current);
-    const c = city.trim();
-    if (!c) { setAreaPrice(null); return; }
-
-    areaPriceTimer.current = setTimeout(async () => {
-      try {
-        const params = new URLSearchParams({ city: c });
-        if (hood.trim()) params.set('neighborhood', hood.trim());
-        const stats = await api.get('/api/listings/area-price?' + params.toString());
-        setAreaPrice(stats.avgPricePerSqm ? stats : null);
-      } catch (err) {
-        logSupabase('sell.new.areaPrice', { message: err.message });
-      }
-    }, 600);
-
-    return () => clearTimeout(areaPriceTimer.current);
-  }, [city, hood]);
 
   function resolvePossessionDate() {
     if (possessionMode === 'immediate') return { ok: true, value: null };
@@ -414,15 +389,6 @@ export default function NewListing() {
             parentCity={city.trim() || undefined} />
         </View>
 
-        {areaPrice ? (
-          <View style={s.priceHintBox}>
-            <Ionicons name="stats-chart-outline" size={16} color={C.primary} />
-            <Text style={s.priceHintText}>
-              {T.areaPriceHint(areaPrice.avgPricePerSqm, areaPrice.sampleSize)}
-            </Text>
-          </View>
-        ) : null}
-
         <View style={s.field}>
           <Text style={s.label}>{T.addressLabel}</Text>
           <TextInput style={s.input} placeholder={T.addressPlaceholder}
@@ -595,8 +561,6 @@ const s = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', marginBottom: 6, textAlign: 'right', color: C.text },
   hint: { fontSize: 12, color: C.textMuted, marginTop: 6, textAlign: 'right' },
   hintRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
-  priceHintBox: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, backgroundColor: C.primaryTint, borderRadius: 12, padding: 12, marginBottom: 18 },
-  priceHintText: { flex: 1, fontSize: 13, color: C.text, textAlign: 'right', lineHeight: 18 },
   input: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 14, padding: 14, fontSize: 15, textAlign: 'right', color: C.text },
   textarea: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 14, padding: 14, fontSize: 15, textAlign: 'right', color: C.text, minHeight: 120, textAlignVertical: 'top' },
   segment: { flexDirection: 'row-reverse', backgroundColor: C.surface, borderRadius: 14, padding: 4 },

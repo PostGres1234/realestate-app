@@ -2,7 +2,6 @@ const express = require("express");
 const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
 const { serverError } = require("../serverError");
-const { getAreaPrice } = require("../areaPrice");
 
 const router = express.Router();
 
@@ -48,20 +47,6 @@ router.get("/map", requireAuth, async (req, res) => {
 
   const myIds = new Set((mine ?? []).map((p) => p.id));
   res.json((data ?? []).filter((p) => !myIds.has(p.id)));
-});
-
-// Returns the average price/sqm for a city (and neighborhood, if given),
-// computed live from the app's own active listings - used by the "add
-// listing" screen so a seller can see a real, current number for their area
-// while pricing their own listing. Returns null when there isn't enough
-// data yet rather than showing a misleading estimate.
-router.get("/area-price", requireAuth, async (req, res) => {
-  const city = (req.query.city || "").trim();
-  if (!city) return res.status(400).json({ error: "Missing city" });
-
-  const neighborhood = (req.query.neighborhood || "").trim() || null;
-  const stats = await getAreaPrice(city, neighborhood);
-  res.json(stats ?? { avgPricePerSqm: null, sampleSize: 0 });
 });
 
 // Creates a listing. seller_id always comes from the verified token, never
