@@ -2,6 +2,7 @@ const express = require("express");
 const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
 const { serverError } = require("../serverError");
+const { isBlocked } = require("../isBlocked");
 
 const router = express.Router();
 
@@ -23,6 +24,14 @@ router.get("/:conversationId", requireAuth, async (req, res) => {
 
   if (conv.seller_id !== req.user.id) {
     return res.json({ callable: false, buyer: null });
+  }
+
+  try {
+    if (await isBlocked(conv.seller_id, conv.buyer_id)) {
+      return res.json({ callable: false, buyer: null });
+    }
+  } catch (err) {
+    return serverError(res, err, "calls.blockCheck");
   }
 
   const { data: profile, error: profileError } = await supabaseAdmin

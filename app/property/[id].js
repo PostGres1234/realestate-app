@@ -23,8 +23,6 @@ const T = {
   forRent: 'להשכרה',
   forSale: 'למכירה',
   featuresTitle: 'מה יש בנכס',
-  locked: 'הצטרפו כדי לראות תיאור מלא, כתובת, מספר חדרים ושטח.',
-  mediaLocked: 'הצטרפו כדי לראות את התמונות',
   ctaGuest: 'הצטרפו כדי ליצור קשר',
   ctaUser: 'שליחת פנייה לבעל הנכס',
   report: 'דיווח על המודעה',
@@ -37,6 +35,7 @@ const T = {
   occPlaceholder: 'לדוגמה: מהנדס תוכנה',
   possessionLabel: 'מועד מסירה',
   possessionImmediate: 'מיידי',
+  possessionFlexible: 'גמיש',
   needsMortgageLabel: 'אתם זקוקים למשכנתא?',
   hasApprovalLabel: 'יש לכם אישור עקרוני למשכנתא?',
   hasCashLabel: 'יש לכם את מלוא הסכום מוכן לתשלום?',
@@ -127,11 +126,11 @@ export default function PropertyDetail() {
       }
       setP(data);
 
-      if (!user) { setMedia([]); return; }
-
-      supabase.rpc('track_view', { p_property: id }).then(({ error: viewErr }) => {
-        if (viewErr) logSupabase('detail.trackView', viewErr, { id });
-      });
+      if (user) {
+        supabase.rpc('track_view', { p_property: id }).then(({ error: viewErr }) => {
+          if (viewErr) logSupabase('detail.trackView', viewErr, { id });
+        });
+      }
 
       const { data: m } = await supabase
         .from('property_images')
@@ -214,20 +213,11 @@ export default function PropertyDetail() {
   const cta = user ? T.ctaUser : T.ctaGuest;
   const owned = FEATURES.filter((f) => p[f.key]);
   const isOwner = user?.id === p.seller_id;
-  const hasDetails = !!p.title;
-
-  const specs = hasDetails
-    ? p.bedrooms + ' ' + T.rooms + '  ·  ' + p.bathrooms + ' ' + T.baths + '  ·  ' + p.area_sqm + ' ' + T.sqm
-    : '';
+  const specs = p.bedrooms + ' ' + T.rooms + '  ·  ' + p.bathrooms + ' ' + T.baths + '  ·  ' + p.area_sqm + ' ' + T.sqm;
 
   return (
     <ScrollView style={s.wrap} contentContainerStyle={{ paddingBottom: 40 }}>
-      {!user ? (
-        <View style={[s.noMedia, s.mediaLocked]}>
-          <Ionicons name="lock-closed-outline" size={30} color={C.textMuted} />
-          <Text style={s.mediaLockedText}>{T.mediaLocked}</Text>
-        </View>
-      ) : media.length ? (
+      {media.length ? (
         <View>
           <ScrollView
             horizontal
@@ -281,45 +271,38 @@ export default function PropertyDetail() {
           {p.neighborhood ? p.city + ', ' + p.neighborhood : p.city}
         </Text>
 
-        {hasDetails ? (
-          <View style={{ gap: 8, marginTop: 10 }}>
-            <Text style={s.title}>{p.title}</Text>
-            {p.address ? <Text style={s.meta}>{p.address}</Text> : null}
-            <Text style={s.specs}>{specs}</Text>
+        <View style={{ gap: 8, marginTop: 10 }}>
+          <Text style={s.title}>{p.title}</Text>
+          {p.address ? <Text style={s.meta}>{p.address}</Text> : null}
+          <Text style={s.specs}>{specs}</Text>
 
-            {p.possession_date !== undefined ? (
-              <View style={s.possessionRow}>
-                <Ionicons name="calendar-outline" size={15} color={C.primary} />
-                <Text style={s.possessionText}>
-                  {T.possessionLabel + ': ' + (p.possession_date
-                    ? formatPossessionDate(p.possession_date)
-                    : T.possessionImmediate)}
-                </Text>
+          {p.possession_date !== undefined ? (
+            <View style={s.possessionRow}>
+              <Ionicons name="calendar-outline" size={15} color={C.primary} />
+              <Text style={s.possessionText}>
+                {T.possessionLabel + ': ' + (p.possession_date
+                  ? formatPossessionDate(p.possession_date)
+                  : p.possession_flexible ? T.possessionFlexible : T.possessionImmediate)}
+              </Text>
+            </View>
+          ) : null}
+
+          {p.description ? <Text style={s.desc}>{p.description}</Text> : null}
+
+          {owned.length ? (
+            <View style={{ marginTop: 10 }}>
+              <Text style={s.sectionTitle}>{T.featuresTitle}</Text>
+              <View style={s.featWrap}>
+                {owned.map((f) => (
+                  <View key={f.key} style={s.feat}>
+                    <Ionicons name={f.icon} size={15} color={C.primary} />
+                    <Text style={s.featText}>{f.label}</Text>
+                  </View>
+                ))}
               </View>
-            ) : null}
-
-            {p.description ? <Text style={s.desc}>{p.description}</Text> : null}
-
-            {owned.length ? (
-              <View style={{ marginTop: 10 }}>
-                <Text style={s.sectionTitle}>{T.featuresTitle}</Text>
-                <View style={s.featWrap}>
-                  {owned.map((f) => (
-                    <View key={f.key} style={s.feat}>
-                      <Ionicons name={f.icon} size={15} color={C.primary} />
-                      <Text style={s.featText}>{f.label}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ) : null}
-          </View>
-        ) : (
-          <View style={s.lock}>
-            <Ionicons name="lock-closed-outline" size={20} color={C.textMuted} />
-            <Text style={s.lockText}>{T.locked}</Text>
-          </View>
-        )}
+            </View>
+          ) : null}
+        </View>
 
         {!isOwner ? (
           <View>
@@ -368,7 +351,10 @@ export default function PropertyDetail() {
 
               {isSale ? (
                 <>
-                  <Text style={s.fLabel}>{T.needsMortgageLabel}</Text>
+                  <View style={s.fLabelRow}>
+                    <Ionicons name="business-outline" size={16} color={C.primary} />
+                    <Text style={[s.fLabel, { marginTop: 0, marginBottom: 0 }]}>{T.needsMortgageLabel}</Text>
+                  </View>
                   <View style={s.yesNoRow}>
                     <Pressable
                       style={[s.yesNoBtn, needsMortgage === true && s.yesNoBtnOn]}
@@ -475,8 +461,6 @@ const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: C.page },
   center: { alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12, marginTop: 60 },
   noMedia: { width: W, height: 120, backgroundColor: C.surface },
-  mediaLocked: { height: 220, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  mediaLockedText: { fontSize: 13, color: C.textMuted, fontWeight: '600' },
   mediaCount: {
     position: 'absolute', top: 52, left: 16,
     flexDirection: 'row', alignItems: 'center', gap: 5,
@@ -507,8 +491,6 @@ const s = StyleSheet.create({
   featWrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
   feat: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5, backgroundColor: C.surface, borderRadius: 16, paddingHorizontal: 11, paddingVertical: 7 },
   featText: { fontSize: 13, color: C.textSecondary },
-  lock: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: C.surface, padding: 16, borderRadius: 14, marginTop: 12 },
-  lockText: { color: C.textSecondary, textAlign: 'right', lineHeight: 22, flex: 1 },
   btn: { backgroundColor: C.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 24 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   jimmyBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderColor: C.primary, borderRadius: 14, paddingVertical: 13, marginTop: 10 },
@@ -520,6 +502,7 @@ const s = StyleSheet.create({
   sheetTitle: { fontSize: 20, fontWeight: '700', color: C.text, textAlign: 'right' },
   sheetHint: { fontSize: 12, color: C.textMuted, textAlign: 'right', marginTop: 4, marginBottom: 8 },
   fLabel: { fontSize: 13, fontWeight: '600', color: C.text, textAlign: 'right', marginBottom: 5, marginTop: 10 },
+  fLabelRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginTop: 10, marginBottom: 5 },
   fInput: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 12, padding: 12, fontSize: 15, textAlign: 'right', color: C.text },
   yesNoRow: { flexDirection: 'row-reverse', gap: 8 },
   yesNoBtn: { borderWidth: 1, borderColor: C.border, backgroundColor: C.surface, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },

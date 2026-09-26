@@ -23,13 +23,12 @@ const T = {
   freshHint: 'פורסמו בשבוע האחרון',
   all: 'כל הנכסים',
   results: 'תוצאות',
-  guestNotice: 'ללא חשבון מוצגים רק עיר ומחיר',
+  guestNotice: 'ללא חשבון לא תוצג הכתובת המדויקת של הנכס',
   empty: 'לא נמצאו נכסים מתאימים',
   rooms: 'חד׳',
   sqm: 'מ"ר',
   perMonth: 'לחודש',
   newTag: 'חדש',
-  photosLocked: 'התחברו לצפייה',
 };
 
 const CATS = [
@@ -98,24 +97,20 @@ export default function Browse() {
     if (list.length) {
       const ids = list.map((x) => x.id);
 
-      if (user) {
-        const { data: imgs, error: imgErr } = await supabase
-          .from('property_images')
-          .select('property_id, url, position, media_type')
-          .in('property_id', ids)
-          .eq('media_type', 'image')
-          .order('position', { ascending: true });
+      const { data: imgs, error: imgErr } = await supabase
+        .from('property_images')
+        .select('property_id, url, position, media_type')
+        .in('property_id', ids)
+        .eq('media_type', 'image')
+        .order('position', { ascending: true });
 
-        if (imgErr) logSupabase('browse.covers', imgErr);
+      if (imgErr) logSupabase('browse.covers', imgErr);
 
-        const covers = {};
-        (imgs ?? []).forEach((im) => {
-          if (!covers[im.property_id]) covers[im.property_id] = im.url;
-        });
-        list.forEach((x) => { x.cover = covers[x.id] ?? null; });
-      } else {
-        list.forEach((x) => { x.cover = null; });
-      }
+      const covers = {};
+      (imgs ?? []).forEach((im) => {
+        if (!covers[im.property_id]) covers[im.property_id] = im.url;
+      });
+      list.forEach((x) => { x.cover = covers[x.id] ?? null; });
 
       if (user) {
         const { data: f, error: favErr } = await supabase
@@ -282,11 +277,7 @@ export default function Browse() {
               renderItem={({ item }) => (
                 <Pressable style={s.mini} onPress={() => router.push('/property/' + item.id)}>
                   <View style={s.miniImgWrap}>
-                    {!user ? (
-                      <View style={[s.miniImg, s.imgLocked]}>
-                        <Ionicons name="lock-closed-outline" size={20} color={C.textMuted} />
-                      </View>
-                    ) : item.cover ? (
+                    {item.cover ? (
                       <Image source={{ uri: item.cover }} style={s.miniImg} />
                     ) : (
                       <View style={[s.miniImg, s.imgEmpty]}>
@@ -305,11 +296,9 @@ export default function Browse() {
                     <Text style={s.miniCity} numberOfLines={1}>
                       {item.neighborhood ? item.city + ', ' + item.neighborhood : item.city}
                     </Text>
-                    {user ? (
-                      <Text style={s.miniMeta} numberOfLines={1}>
-                        {(item.bedrooms ?? '-') + ' ' + T.rooms + '  ·  ' + (item.area_sqm ?? '-') + ' ' + T.sqm}
-                      </Text>
-                    ) : null}
+                    <Text style={s.miniMeta} numberOfLines={1}>
+                      {(item.bedrooms ?? '-') + ' ' + T.rooms + '  ·  ' + (item.area_sqm ?? '-') + ' ' + T.sqm}
+                    </Text>
                   </View>
                 </Pressable>
               )}
@@ -347,12 +336,7 @@ export default function Browse() {
           renderItem={({ item }) => (
             <Pressable style={s.card} onPress={() => router.push('/property/' + item.id)}>
               <View style={s.imgWrap}>
-                {!user ? (
-                  <View style={[s.img, s.imgLocked]}>
-                    <Ionicons name="lock-closed-outline" size={26} color={C.textMuted} />
-                    <Text style={s.imgLockedText}>{T.photosLocked}</Text>
-                  </View>
-                ) : item.cover ? (
+                {item.cover ? (
                   <Image source={{ uri: item.cover }} style={s.img} />
                 ) : (
                   <View style={[s.img, s.imgEmpty]}>
@@ -485,8 +469,6 @@ const s = StyleSheet.create({
   imgWrap: { position: 'relative' },
   img: { width: '100%', height: 180, backgroundColor: C.placeholder },
   imgEmpty: { alignItems: 'center', justifyContent: 'center' },
-  imgLocked: { alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface, gap: 6 },
-  imgLockedText: { fontSize: 11, color: C.textMuted, fontWeight: '600' },
   priceBadge: { position: 'absolute', bottom: 12, right: 12, flexDirection: 'row-reverse', alignItems: 'baseline', gap: 4, backgroundColor: 'rgba(255,255,255,0.97)', borderRadius: 12, paddingHorizontal: 13, paddingVertical: 7, shadowColor: '#1A1D26', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6, elevation: 2 },
   priceBadgeText: { fontSize: 17, fontWeight: '800', color: C.primary },
   priceBadgeSub: { fontSize: 11, color: C.textMuted },

@@ -2,6 +2,7 @@ const express = require("express");
 const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
 const { serverError } = require("../serverError");
+const { isBlocked } = require("../isBlocked");
 
 const router = express.Router();
 
@@ -21,6 +22,14 @@ router.post("/", requireAuth, async (req, res) => {
 
   if (propErr || !property) {
     return res.status(404).json({ error: "Property not found" });
+  }
+
+  try {
+    if (await isBlocked(buyerId, property.seller_id)) {
+      return res.status(403).json({ error: "Cannot contact a blocked user" });
+    }
+  } catch (err) {
+    return serverError(res, err, "contact.blockCheck");
   }
 
   const { data: existing, error: existingErr } = await supabaseAdmin

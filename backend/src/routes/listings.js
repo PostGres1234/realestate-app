@@ -56,7 +56,8 @@ router.post("/", requireAuth, async (req, res) => {
   const {
     listingType, title, description, price, city, neighborhood, address,
     latitude, longitude, bedrooms, bathrooms, area_sqm, propertyType,
-    hasBalcony, hasShelter, hasParking, hasElevator, hasYard, possessionDate,
+    hasBalcony, hasShelter, hasParking, hasElevator, hasYard,
+    possessionDate, possessionFlexible,
   } = req.body || {};
 
   if (!title?.trim() || !price || !city?.trim()) {
@@ -86,6 +87,7 @@ router.post("/", requireAuth, async (req, res) => {
       has_elevator: !!hasElevator,
       has_yard: !!hasYard,
       possession_date: possessionDate ?? null,
+      possession_flexible: !!possessionFlexible,
       status: "active",
     })
     .select("id")
@@ -171,7 +173,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
   const {
     title, description, price, city, address,
     bedrooms, bathrooms, area_sqm, property_type,
-    possession_date, status,
+    possession_date, possession_flexible, status,
   } = req.body || {};
 
   if (!title?.trim() || !price || !city?.trim()) {
@@ -191,6 +193,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
       area_sqm: area_sqm ? Number(area_sqm) : null,
       property_type,
       possession_date: possession_date ?? null,
+      possession_flexible: !!possession_flexible,
       status,
     })
     .eq("id", req.params.id);

@@ -12,6 +12,7 @@ const favoritesRouter = require("./routes/favorites");
 const recentRouter = require("./routes/recent");
 const reportsRouter = require("./routes/reports");
 const profileRouter = require("./routes/profile");
+const blocksRouter = require("./routes/blocks");
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.use("/api/favorites", favoritesRouter);
 app.use("/api/recent", recentRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/profile", profileRouter);
+app.use("/api/blocks", blocksRouter);
 
 // Catches the CORS rejection above (and any other error that reaches here)
 // so a blocked cross-origin request gets a clean JSON response instead of

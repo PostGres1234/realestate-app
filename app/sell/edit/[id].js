@@ -32,6 +32,7 @@ const T = {
   possessionLabel: 'מועד מסירה',
   possessionHint: 'כך קונים ושוכרים ידעו אם התזמון מתאים להם.',
   possessionImmediate: 'מיידי',
+  possessionFlexible: 'גמיש',
   possessionFuture: 'תאריך עתידי',
   day: 'יום',
   month: 'חודש',
@@ -96,7 +97,8 @@ export default function EditListing() {
   const [stage, setStage] = useState('');
 
   function resolvePossessionDate() {
-    if (possessionMode === 'immediate') return { ok: true, value: null };
+    if (possessionMode === 'immediate') return { ok: true, value: null, flexible: false };
+    if (possessionMode === 'flexible') return { ok: true, value: null, flexible: true };
 
     if (!pDay.trim() || !pMonth.trim() || !pYear.trim()) {
       return { ok: false, error: T.missingPossession };
@@ -116,7 +118,7 @@ export default function EditListing() {
     }
 
     const iso = y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-    return { ok: true, value: iso };
+    return { ok: true, value: iso, flexible: false };
   }
 
   useEffect(() => {
@@ -150,6 +152,8 @@ export default function EditListing() {
         setPDay(String(Number(d)));
         setPMonth(String(Number(m)));
         setPYear(y);
+      } else if (data.possession_flexible) {
+        setPossessionMode('flexible');
       }
 
       const { data: m } = await supabase
@@ -285,6 +289,7 @@ export default function EditListing() {
         area_sqm: area ? Number(area) : null,
         property_type: type,
         possession_date: possession.value,
+        possession_flexible: possession.flexible,
         status,
       });
     } catch (err) {
@@ -374,6 +379,12 @@ export default function EditListing() {
             onPress={() => setPossessionMode('immediate')}>
             <Text style={possessionMode === 'immediate' ? s.chipTextOn : s.chipText}>
               {T.possessionImmediate}
+            </Text>
+          </Pressable>
+          <Pressable style={[s.chip, possessionMode === 'flexible' && s.chipOn]}
+            onPress={() => setPossessionMode('flexible')}>
+            <Text style={possessionMode === 'flexible' ? s.chipTextOn : s.chipText}>
+              {T.possessionFlexible}
             </Text>
           </Pressable>
           <Pressable style={[s.chip, possessionMode === 'future' && s.chipOn]}

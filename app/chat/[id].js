@@ -31,6 +31,10 @@ const T = {
   noteLabel: 'הודעה',
   save: 'שמירה',
   cancel: 'ביטול',
+  blockTitle: 'חסימת משתמש',
+  blockBody: 'לא תוכלו לראות זה את זה או להתכתב. לחסום?',
+  blockConfirm: 'חסימה',
+  blockFail: 'החסימה נכשלה',
 };
 
 const GREETING_PREFIX = 'שלום, מתעניין/ת בנכס: ';
@@ -80,6 +84,7 @@ export default function Chat() {
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
   const [introEdit, setIntroEdit] = useState(null);
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const listRef = useRef(null);
 
   useEffect(() => {
@@ -259,6 +264,18 @@ export default function Chat() {
     if (!res.ok) Alert.alert(T.callTitle, res.message);
   }
 
+  async function doBlock() {
+    setBlockConfirmOpen(false);
+    try {
+      await api.post('/api/blocks', { blockedUser: otherUser });
+    } catch (err) {
+      logSupabase('chat.block', { message: err.message }, { conversationId: id });
+      Alert.alert(T.blockFail, err.message);
+      return;
+    }
+    router.replace('/messages');
+  }
+
   const time = (iso) =>
     new Date(iso).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
 
@@ -334,6 +351,13 @@ export default function Chat() {
           <Pressable onPress={() => setReportOpen(true)} hitSlop={8}>
             <Ionicons name="flag-outline" size={20} color={C.textMuted} />
           </Pressable>
+
+          {otherUser ? (
+            <Pressable style={s.blockHeaderBtn} onPress={() => setBlockConfirmOpen(true)} hitSlop={8}>
+              <Ionicons name="ban-outline" size={17} color={C.danger} />
+              <Text style={s.blockHeaderBtnText}>{T.blockConfirm}</Text>
+            </Pressable>
+          ) : null}
 
           {callable ? (
             <Pressable style={s.callBtn} onPress={onCall} hitSlop={8}>
@@ -490,6 +514,23 @@ export default function Chat() {
           </ScrollView>
         </View>
       </Modal>
+
+      <Modal visible={blockConfirmOpen} transparent animationType="fade"
+        onRequestClose={() => setBlockConfirmOpen(false)}>
+        <View style={s.backdrop}>
+          <View style={[s.sheet, { borderRadius: 20 }]}>
+            <Text style={s.sheetTitle}>{T.blockTitle}</Text>
+            <Text style={s.blockBodyText}>{T.blockBody}</Text>
+
+            <Pressable style={s.blockConfirmBtn} onPress={doBlock}>
+              <Text style={s.btnText}>{T.blockConfirm}</Text>
+            </Pressable>
+            <Pressable onPress={() => setBlockConfirmOpen(false)} style={{ marginTop: 12 }}>
+              <Text style={s.cancelText}>{T.cancel}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -540,4 +581,8 @@ const s = StyleSheet.create({
   btn: { backgroundColor: C.primary, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 20 },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   cancelText: { color: C.textMuted, textAlign: 'center', fontSize: 14 },
+  blockBodyText: { color: C.textSecondary, fontSize: 14, textAlign: 'right', lineHeight: 20, marginTop: 4 },
+  blockConfirmBtn: { backgroundColor: C.danger, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 20 },
+  blockHeaderBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: C.danger, borderRadius: 12, paddingHorizontal: 9, paddingVertical: 5 },
+  blockHeaderBtnText: { color: C.danger, fontSize: 12, fontWeight: '700' },
 });

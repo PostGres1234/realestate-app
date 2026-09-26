@@ -2,6 +2,7 @@ const express = require("express");
 const { supabaseAdmin } = require("../supabaseAdmin");
 const { requireAuth } = require("../authMiddleware");
 const { serverError } = require("../serverError");
+const { isBlocked } = require("../isBlocked");
 
 const router = express.Router();
 
@@ -32,6 +33,15 @@ router.post("/", requireAuth, async (req, res) => {
   }
   if (isBuyer && conv.intro_sent && !conv.unlocked) {
     return res.status(403).json({ error: "Waiting for the seller to reply" });
+  }
+
+  const otherId = isBuyer ? conv.seller_id : conv.buyer_id;
+  try {
+    if (await isBlocked(req.user.id, otherId)) {
+      return res.status(403).json({ error: "Cannot message a blocked user" });
+    }
+  } catch (err) {
+    return serverError(res, err, "messages.send.blockCheck");
   }
 
   const { error } = await supabaseAdmin.from("messages").insert({
