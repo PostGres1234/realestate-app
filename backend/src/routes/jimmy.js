@@ -278,7 +278,17 @@ router.post("/chat", requireAuth, async (req, res) => {
     res.json({ text, ids, options, skippable: true, multi });
   } catch (e) {
     console.log("jimmy chat error", String(e));
-    res.json({ text: "אירעה שגיאה. נסו שוב.", ids: [], options: [], skippable: false, multi: false });
+
+    // Anthropic returns this exact phrase when the account's prepaid credit
+    // balance hits zero - tell the user Jimmy is genuinely unavailable
+    // instead of the generic "try again" message, since retrying will just
+    // fail the same way until credits are added.
+    const outOfFunds = /credit balance is too low/i.test(e.message || "");
+    const fallbackText = outOfFunds
+      ? "ג'ימי לא זמין כרגע. אנחנו כבר על זה - נסו שוב מאוחר יותר."
+      : "אירעה שגיאה. נסו שוב.";
+
+    res.json({ text: fallbackText, ids: [], options: [], skippable: false, multi: false });
   }
 });
 
